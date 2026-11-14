@@ -2,6 +2,9 @@
 import SwiftUI
 import FramesCore
 
+// SwiftUI kennt selbst einen Typ dieses Namens. In der App ist immer der Bibliothekseintrag gemeint.
+typealias LibraryItem = FramesCore.LibraryItem
+
 struct MetaRoute: Hashable {
     var type: String
     var id: String
