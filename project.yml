@@ -1,0 +1,43 @@
+# Xcode-Projekt für die App. Erzeugen mit: xcodegen generate
+name: Frames
+options:
+  bundleIdPrefix: app.frames
+  createIntermediateGroups: true
+  deploymentTarget:
+    iOS: "17.0"
+    tvOS: "17.0"
+    macOS: "14.0"
+packages:
+  Frames:
+    path: .
+targets:
+  Frames:
+    type: application
+    platform: auto
+    supportedDestinations: [iOS, tvOS, macOS]
+    sources:
+      - App
+    dependencies:
+      - package: Frames
+        product: FramesUI
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.frames.Frames
+        PRODUCT_NAME: Frames
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        SWIFT_VERSION: "5.0"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Frames
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.entertainment
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UIUserInterfaceStyle: Dark
+schemes:
+  Frames:
+    build:
+      targets:
+        Frames: all
+    run:
+      config: Debug

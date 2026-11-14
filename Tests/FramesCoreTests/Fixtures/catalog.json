@@ -1,0 +1,83 @@
+{
+ "metas": [
+  {
+   "id": "tt7526136",
+   "type": "movie",
+   "name": "Heart of the Beast",
+   "poster": "https://images.metahub.space/poster/small/tt7526136/img",
+   "description": "After a harrowing plane crash, a Special Forces officer and his combat dog find themselves stranded deep in the Alaskan wilderness. Together, they are forced into a brutal fight for survival against the elements.",
+   "releaseInfo": "2026",
+   "runtime": "101 min",
+   "genres": [
+    "Action",
+    "Adventure",
+    "Drama"
+   ],
+   "imdbRating": "7.2",
+   "cast": [
+    "Brad Pitt",
+    "J.K. Simmons",
+    "Anna Lambe"
+   ],
+   "director": [
+    "David Ayer"
+   ],
+   "released": "2026-09-25T00:00:00.000Z",
+   "imdb_id": "tt7526136"
+  },
+  {
+   "id": "tt35538033",
+   "type": "movie",
+   "name": "Resident Evil",
+   "poster": "https://images.metahub.space/poster/small/tt35538033/img",
+   "description": "Follows a hapless courier tasked with delivering a package to a remote hospital. He soon finds himself caught in the middle of an outbreak and must fight through hordes of mutated creatures to survive.",
+   "releaseInfo": "2026",
+   "runtime": "94 min",
+   "genres": [
+    "Action",
+    "Horror",
+    "Sci-Fi"
+   ],
+   "imdbRating": "",
+   "cast": [
+    "Austin Abrams",
+    "Paul Walter Hauser",
+    "Zach Cherry"
+   ],
+   "director": [
+    "Zach Cregger"
+   ],
+   "released": "2026-09-18T00:00:00.000Z",
+   "imdb_id": "tt35538033"
+  },
+  {
+   "id": "tt34206385",
+   "type": "movie",
+   "name": "Primetime",
+   "poster": "https://images.metahub.space/poster/small/tt34206385/img",
+   "description": "In 2006, To Catch a Predator host Chris Hansen sets out to make television history.",
+   "releaseInfo": "2026",
+   "runtime": "110 min",
+   "genres": [
+    "Biography",
+    "Crime",
+    "Drama"
+   ],
+   "imdbRating": "7.0",
+   "cast": [
+    "Robert Pattinson",
+    "Merritt Wever",
+    "Skyler Gisondo"
+   ],
+   "director": [
+    "Lance Oppenheim"
+   ],
+   "released": "2026-09-25T00:00:00.000Z",
+   "imdb_id": "tt34206385"
+  }
+ ],
+ "hasMore": true,
+ "cacheMaxAge": 14400,
+ "staleRevalidate": 3600,
+ "staleError": 3600
+}

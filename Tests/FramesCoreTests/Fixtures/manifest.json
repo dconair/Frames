@@ -1,0 +1,171 @@
+{
+ "id": "com.linvo.cinemeta",
+ "version": "3.0.14",
+ "description": "The official addon for movie and series catalogs",
+ "name": "Cinemeta",
+ "resources": [
+  "catalog",
+  "meta",
+  "addon_catalog"
+ ],
+ "types": [
+  "movie",
+  "series"
+ ],
+ "idPrefixes": [
+  "tt"
+ ],
+ "catalogs": [
+  {
+   "type": "movie",
+   "id": "top",
+   "extra": [
+    {
+     "name": "genre",
+     "options": [
+      "Action",
+      "Adventure",
+      "Animation"
+     ]
+    },
+    {
+     "name": "search"
+    },
+    {
+     "name": "skip"
+    }
+   ],
+   "extraSupported": [
+    "search",
+    "genre",
+    "skip"
+   ],
+   "name": "Popular"
+  },
+  {
+   "type": "series",
+   "id": "top",
+   "extra": [
+    {
+     "name": "genre",
+     "options": [
+      "Action",
+      "Adventure",
+      "Animation"
+     ]
+    },
+    {
+     "name": "search"
+    },
+    {
+     "name": "skip"
+    }
+   ],
+   "extraSupported": [
+    "search",
+    "genre",
+    "skip"
+   ],
+   "name": "Popular"
+  },
+  {
+   "type": "movie",
+   "id": "year",
+   "extra": [
+    {
+     "name": "genre",
+     "options": [
+      "2026",
+      "2025",
+      "2024"
+     ],
+     "isRequired": true
+    },
+    {
+     "name": "skip"
+    }
+   ],
+   "extraSupported": [
+    "genre",
+    "skip"
+   ],
+   "extraRequired": [
+    "genre"
+   ],
+   "name": "New"
+  },
+  {
+   "type": "series",
+   "id": "year",
+   "extra": [
+    {
+     "name": "genre",
+     "options": [
+      "2026",
+      "2025",
+      "2024"
+     ],
+     "isRequired": true
+    },
+    {
+     "name": "skip"
+    }
+   ],
+   "extraSupported": [
+    "genre",
+    "skip"
+   ],
+   "extraRequired": [
+    "genre"
+   ],
+   "name": "New"
+  },
+  {
+   "type": "movie",
+   "id": "imdbRating",
+   "extra": [
+    {
+     "name": "genre",
+     "options": [
+      "Action",
+      "Adventure",
+      "Animation"
+     ]
+    },
+    {
+     "name": "skip"
+    }
+   ],
+   "extraSupported": [
+    "genre",
+    "skip"
+   ],
+   "name": "Featured"
+  },
+  {
+   "type": "series",
+   "id": "imdbRating",
+   "extra": [
+    {
+     "name": "genre",
+     "options": [
+      "Action",
+      "Adventure",
+      "Animation"
+     ]
+    },
+    {
+     "name": "skip"
+    }
+   ],
+   "extraSupported": [
+    "genre",
+    "skip"
+   ],
+   "name": "Featured"
+  }
+ ],
+ "behaviorHints": {
+  "newEpisodeNotifications": true
+ }
+}

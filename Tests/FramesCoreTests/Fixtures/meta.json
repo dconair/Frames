@@ -1,0 +1,103 @@
+{
+ "meta": {
+  "id": "tt0903747",
+  "type": "series",
+  "name": "Breaking Bad",
+  "poster": "https://images.metahub.space/poster/small/tt0903747/img",
+  "background": "https://images.metahub.space/background/medium/tt0903747/img",
+  "logo": "https://images.metahub.space/logo/medium/tt0903747/img",
+  "description": "A chemistry teacher diagnosed with inoperable lung cancer turns to manufacturing and selling methamphetamine with a former student to secure his family's future.",
+  "releaseInfo": "2008–2013",
+  "runtime": "49 min",
+  "genres": [
+   "Crime",
+   "Drama",
+   "Thriller"
+  ],
+  "imdbRating": "9.5",
+  "cast": [
+   "Bryan Cranston",
+   "Aaron Paul",
+   "Anna Gunn"
+  ],
+  "director": null,
+  "released": "2008-01-20T00:00:00.000Z",
+  "videos": [
+   {
+    "name": "Pilot",
+    "season": 1,
+    "number": 1,
+    "firstAired": "2008-01-21T05:00:00.000Z",
+    "tvdb_id": 349232,
+    "rating": "7.7",
+    "overview": "When an unassuming high school chemistry teacher discovers he has a rare form of lung cancer, he decides to team up with a former student and create a top of the line crystal meth in a used RV, to provide for his family once he is gone.",
+    "thumbnail": "https://episodes.metahub.space/tt0903747/1/1/w780.jpg",
+    "id": "tt0903747:1:1",
+    "released": "2008-01-21T05:00:00.000Z",
+    "episode": 1,
+    "description": "When an unassuming high school chemistry teacher discovers he has a rare form of lung cancer, he decides to team up with a former student and create a top of the line crystal meth in a used RV, to provide for his family once he is gone."
+   },
+   {
+    "name": "Cat's in the Bag...",
+    "season": 1,
+    "number": 2,
+    "firstAired": "2008-01-28T05:00:00.000Z",
+    "tvdb_id": 349233,
+    "rating": "7.6",
+    "overview": "Walt and Jesse attempt to tie up loose ends. The desperate situation gets more complicated with the flip of a coin. Walt's wife, Skyler, becomes suspicious of Walt's strange behavior.",
+    "thumbnail": "https://episodes.metahub.space/tt0903747/1/2/w780.jpg",
+    "id": "tt0903747:1:2",
+    "released": "2008-01-28T05:00:00.000Z",
+    "episode": 2,
+    "description": "Walt and Jesse attempt to tie up loose ends. The desperate situation gets more complicated with the flip of a coin. Walt's wife, Skyler, becomes suspicious of Walt's strange behavior."
+   },
+   {
+    "name": "...And the Bag's in the River",
+    "season": 1,
+    "number": 3,
+    "firstAired": "2008-02-11T05:00:00.000Z",
+    "tvdb_id": 349235,
+    "rating": "7.6",
+    "overview": "Walter fights with Jesse over his drug use, causing him to leave Walter alone with their captive, Krazy-8. Meanwhile, Hank has a scared straight moment with Walter Jr..",
+    "thumbnail": "https://episodes.metahub.space/tt0903747/1/3/w780.jpg",
+    "id": "tt0903747:1:3",
+    "released": "2008-02-11T05:00:00.000Z",
+    "episode": 3,
+    "description": "Walter fights with Jesse over his drug use, causing him to leave Walter alone with their captive, Krazy-8. Meanwhile, Hank has a scared straight moment with Walter Jr.."
+   },
+   {
+    "name": "Seven Thirty-Seven",
+    "season": 2,
+    "number": 1,
+    "firstAired": "2009-03-09T05:00:00.000Z",
+    "tvdb_id": 438912,
+    "rating": "7.7",
+    "overview": "Walt and Jesse are reminded of Tuco’s volatile nature, and try to figure a way out of their business partnership. Hank attempts to mend fences between the estranged Marie and Skyler.",
+    "thumbnail": "https://episodes.metahub.space/tt0903747/2/1/w780.jpg",
+    "id": "tt0903747:2:1",
+    "released": "2009-03-09T05:00:00.000Z",
+    "episode": 1,
+    "description": "Walt and Jesse are reminded of Tuco’s volatile nature, and try to figure a way out of their business partnership. Hank attempts to mend fences between the estranged Marie and Skyler."
+   },
+   {
+    "name": "Grilled",
+    "season": 2,
+    "number": 2,
+    "firstAired": "2009-03-16T05:00:00.000Z",
+    "tvdb_id": 438913,
+    "rating": "7.9",
+    "overview": "Walt and Jesse find themselves in close quarters with an unhinged Tuco. Marie and Hank comfort Skyler, who is distraught over Walt’s disappearance. Hank pays a visit to Mrs. Pinkman on some not-so-official business.",
+    "thumbnail": "https://episodes.metahub.space/tt0903747/2/2/w780.jpg",
+    "id": "tt0903747:2:2",
+    "released": "2009-03-16T05:00:00.000Z",
+    "episode": 2,
+    "description": "Walt and Jesse find themselves in close quarters with an unhinged Tuco. Marie and Hank comfort Skyler, who is distraught over Walt’s disappearance. Hank pays a visit to Mrs. Pinkman on some not-so-official business."
+   }
+  ],
+  "behaviorHints": {
+   "defaultVideoId": null,
+   "hasScheduledVideos": true
+  },
+  "year": "2008–2013"
+ }
+}

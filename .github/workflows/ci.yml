@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: FramesCore testen
+    runs-on: ubuntu-latest
+    container: swift:6.0
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift test
+
+  apps:
+    name: App bauen (${{ matrix.name }})
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: iOS
+            destination: generic/platform=iOS Simulator
+          - name: tvOS
+            destination: generic/platform=tvOS Simulator
+          - name: macOS
+            destination: platform=macOS
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: xcodegen generate
+      - run: >
+          xcodebuild build
+          -project Frames.xcodeproj
+          -scheme Frames
+          -destination "${{ matrix.destination }}"
+          -skipPackagePluginValidation
+          CODE_SIGNING_ALLOWED=NO

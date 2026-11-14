@@ -1,0 +1,355 @@
+{
+ "result": {
+  "addons": [
+   {
+    "manifest": {
+     "id": "com.linvo.cinemeta",
+     "version": "3.0.12",
+     "description": "The official addon for movie and series catalogs",
+     "name": "Cinemeta",
+     "resources": [
+      "catalog",
+      "meta",
+      "addon_catalog"
+     ],
+     "types": [
+      "movie",
+      "series"
+     ],
+     "idPrefixes": [
+      "tt"
+     ],
+     "catalogs": [
+      {
+       "type": "movie",
+       "id": "top",
+       "extra": [
+        {
+         "name": "genre",
+         "options": [
+          "Action",
+          "Adventure",
+          "Animation"
+         ]
+        },
+        {
+         "name": "search"
+        },
+        {
+         "name": "skip"
+        }
+       ],
+       "extraSupported": [
+        "search",
+        "genre",
+        "skip"
+       ],
+       "name": "Popular"
+      },
+      {
+       "type": "series",
+       "id": "top",
+       "extra": [
+        {
+         "name": "genre",
+         "options": [
+          "Action",
+          "Adventure",
+          "Animation"
+         ]
+        },
+        {
+         "name": "search"
+        },
+        {
+         "name": "skip"
+        }
+       ],
+       "extraSupported": [
+        "search",
+        "genre",
+        "skip"
+       ],
+       "name": "Popular"
+      },
+      {
+       "type": "movie",
+       "id": "year",
+       "extra": [
+        {
+         "name": "genre",
+         "options": [
+          "2025",
+          "2024",
+          "2023"
+         ],
+         "isRequired": true
+        },
+        {
+         "name": "skip"
+        }
+       ],
+       "extraSupported": [
+        "genre",
+        "skip"
+       ],
+       "extraRequired": [
+        "genre"
+       ],
+       "name": "New"
+      },
+      {
+       "type": "series",
+       "id": "year",
+       "extra": [
+        {
+         "name": "genre",
+         "options": [
+          "2025",
+          "2024",
+          "2023"
+         ],
+         "isRequired": true
+        },
+        {
+         "name": "skip"
+        }
+       ],
+       "extraSupported": [
+        "genre",
+        "skip"
+       ],
+       "extraRequired": [
+        "genre"
+       ],
+       "name": "New"
+      }
+     ],
+     "behaviorHints": {
+      "newEpisodeNotifications": true
+     }
+    },
+    "transportUrl": "https://v3-cinemeta.strem.io/manifest.json",
+    "flags": {
+     "official": true,
+     "protected": true
+    }
+   },
+   {
+    "manifest": {
+     "id": "com.linvo.stremiochannels",
+     "version": "1.30.7",
+     "description": "Watch your favourite YouTube channels ad-free and get notified when they upload new videos.",
+     "name": "YouTube",
+     "resources": [
+      "catalog",
+      "meta"
+     ],
+     "types": [
+      "channel"
+     ],
+     "idPrefixes": [
+      "yt_id:"
+     ],
+     "catalogs": [
+      {
+       "type": "channel",
+       "id": "top",
+       "extra": [
+        {
+         "name": "search",
+         "isRequired": false
+        },
+        {
+         "name": "genre",
+         "options": [
+          "Animation",
+          "Automotive",
+          "Beauty & Fashion"
+         ],
+         "isRequired": false
+        },
+        {
+         "name": "skip",
+         "isRequired": false
+        }
+       ]
+      },
+      {
+       "type": "channel",
+       "id": "videos",
+       "extra": [
+        {
+         "name": "search",
+         "isRequired": true
+        }
+       ]
+      }
+     ]
+    },
+    "transportUrl": "https://v3-channels.strem.io/manifest.json",
+    "flags": {
+     "official": true,
+     "protected": false
+    }
+   },
+   {
+    "manifest": {
+     "id": "org.stremio.watchhub",
+     "logo": "https://www.strem.io/images/watchhub-logo.png",
+     "version": "1.15.0",
+     "name": "WatchHub",
+     "description": "Find where to stream your favorite movies and shows amongst Netflix, iTunes, Hulu, Amazon, HBO GO and many others. Supports many countries.",
+     "resources": [
+      "stream"
+     ],
+     "types": [
+      "movie",
+      "series"
+     ],
+     "catalogs": [],
+     "idPrefixes": [
+      "tt"
+     ]
+    },
+    "transportUrl": "https://watchhub.strem.io/manifest.json",
+    "flags": {
+     "official": true,
+     "protected": false
+    }
+   },
+   {
+    "manifest": {
+     "id": "org.stremio.pubdomainmovies",
+     "version": "1.0.0",
+     "logo": "https://johnserv531.github.io/gh-images/1586344884.jpg",
+     "name": "Public Domain Movies",
+     "description": "Torrents for public domain movies. Includes a collection of more then 500 public domain movies.",
+     "resources": [
+      "catalog",
+      "stream"
+     ],
+     "types": [
+      "movie"
+     ],
+     "catalogs": [
+      {
+       "type": "movie",
+       "id": "publicdomainmovies",
+       "extra": [
+        {
+         "name": "skip"
+        },
+        {
+         "name": "search"
+        }
+       ]
+      }
+     ],
+     "idPrefixes": [
+      "tt"
+     ]
+    },
+    "transportUrl": "https://caching.stremio.net/publicdomainmovies.now.sh/manifest.json",
+    "flags": {
+     "official": true,
+     "protected": false
+    }
+   },
+   {
+    "manifest": {
+     "id": "org.stremio.opensubtitlesv3",
+     "version": "1.0.0",
+     "name": "OpenSubtitles v3",
+     "description": "OpenSubtitles v3 Addon for Stremio",
+     "catalogs": [],
+     "resources": [
+      "subtitles"
+     ],
+     "types": [
+      "movie",
+      "series"
+     ],
+     "idPrefixes": [
+      "tt"
+     ],
+     "logo": "http://www.strem.io/images/addons/opensubtitles-logo.png"
+    },
+    "transportUrl": "https://opensubtitles-v3.strem.io/manifest.json",
+    "flags": {
+     "official": true,
+     "protected": false
+    }
+   },
+   {
+    "manifest": {
+     "id": "org.stremio.opensubtitles",
+     "version": "0.24.0",
+     "name": "OpenSubtitles",
+     "description": "The official add-on for subtitles from OpenSubtitles",
+     "logo": "http://www.strem.io/images/addons/opensubtitles-logo.png",
+     "resources": [
+      "subtitles"
+     ],
+     "types": [
+      "series",
+      "movie",
+      "other"
+     ],
+     "catalogs": [],
+     "behaviorHints": {
+      "adult": false
+     }
+    },
+    "transportUrl": "https://opensubtitles.strem.io/stremio/v1",
+    "flags": {
+     "official": true,
+     "protected": false
+    }
+   },
+   {
+    "manifest": {
+     "id": "org.stremio.local",
+     "version": "1.10.0",
+     "description": "Local add-on to find playable files: .torrent, .mp4, .mkv and .avi",
+     "name": "Local Files (without catalog support)",
+     "resources": [
+      {
+       "name": "meta",
+       "types": [
+        "other"
+       ],
+       "idPrefixes": [
+        "local:",
+        "bt:"
+       ]
+      },
+      {
+       "name": "stream",
+       "types": [
+        "movie",
+        "series"
+       ],
+       "idPrefixes": [
+        "tt"
+       ]
+      }
+     ],
+     "types": [
+      "movie",
+      "series",
+      "other"
+     ],
+     "catalogs": []
+    },
+    "transportUrl": "http://127.0.0.1:11470/local-addon/manifest.json",
+    "flags": {
+     "official": true,
+     "protected": true
+    }
+   }
+  ],
+  "isInitial": true,
+  "lastModified": "2026-11-14T16:33:18.338169557Z"
+ }
+}
