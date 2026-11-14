@@ -99,7 +99,10 @@ struct DetailView: View {
                         .lineLimit(6)
                 }
                 if !meta.isSeries {
-                    NavigationLink(value: StreamsRoute(type: meta.type, streamId: meta.streamId(), title: meta.name, subtitle: meta.releaseInfo)) {
+                    NavigationLink(value: StreamsRoute(item: PlaybackItem(
+                        metaId: meta.id, type: meta.type, name: meta.name, poster: meta.poster?.absoluteString,
+                        videoId: meta.streamId(), subtitle: meta.releaseInfo
+                    ))) {
                         Text("▶  ABSPIELEN")
                     }
                     .buttonStyle(SignalButtonStyle(.primary))
@@ -142,10 +145,11 @@ struct DetailView: View {
             }
             LazyVStack(spacing: Signal.pt(10)) {
                 ForEach(meta.episodes(inSeason: current)) { episode in
-                    NavigationLink(value: StreamsRoute(
-                        type: meta.type, streamId: meta.streamId(for: episode),
-                        title: meta.name, subtitle: [episode.code, episode.title].compactMap { $0 }.joined(separator: " · ")
-                    )) {
+                    NavigationLink(value: StreamsRoute(item: PlaybackItem(
+                        metaId: meta.id, type: meta.type, name: meta.name, poster: meta.poster?.absoluteString,
+                        videoId: meta.streamId(for: episode),
+                        subtitle: [episode.code, episode.title].compactMap { $0 }.joined(separator: " · ")
+                    ))) {
                         EpisodeRow(episode: episode)
                     }
                     .buttonStyle(SignalCardButtonStyle(radius: 8, grows: false))

@@ -13,8 +13,8 @@ struct StreamsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Signal.pt(28)) {
                 VStack(alignment: .leading, spacing: Signal.pt(10)) {
-                    SignalEyebrow(route.subtitle ?? "Quellen")
-                    Text(route.title)
+                    SignalEyebrow(route.item.subtitle ?? "Quellen")
+                    Text(route.item.name)
                         .font(.signal(64, .bold))
                         .tracking(-0.04 * Signal.text(64))
                         .foregroundStyle(Signal.Palette.text)
@@ -35,8 +35,7 @@ struct StreamsView: View {
                             ForEach(Array(streams.enumerated()), id: \.element.id) { position, item in
                                 if let url = item.stream.playableURL {
                                     NavigationLink(value: PlayerRoute(
-                                        url: url, headers: item.stream.requestHeaders,
-                                        title: route.title, subtitle: route.subtitle
+                                        url: url, headers: item.stream.requestHeaders, item: route.item
                                     )) {
                                         StreamRow(item: item, isRecommended: position == 0)
                                     }
@@ -62,7 +61,7 @@ struct StreamsView: View {
         .signalPage()
         .task(id: route) {
             guard streams == nil else { return }
-            let all = await model.content.streams(type: route.type, id: route.streamId, addons: model.addons)
+            let all = await model.content.streams(type: route.item.type, id: route.item.videoId, addons: model.addons)
             let ranked = StreamRanker.ranked(all, preferences: model.settings)
             withAnimation(Signal.Motion.sheet) {
                 hiddenCount = all.count - ranked.count

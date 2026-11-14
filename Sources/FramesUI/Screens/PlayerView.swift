@@ -1,117 +1,495 @@
 #if canImport(SwiftUI)
 import SwiftUI
-import AVKit
-import Combine
+import AetherEngine
 import FramesCore
 
-/// Erste Fassung des Players auf Basis des Systemplayers.
-///
-/// Auf iPhone, iPad und Mac liegen die Skip-Tasten mit den eingestellten Intervallen über dem Bild.
-/// Auf dem Fernseher übernimmt vorerst die Systemsteuerung. Der eigene Player mit Bildvorschau beim
-/// Spulen und MKV-Wiedergabe über libmpv folgt als nächster Abschnitt.
+/// Der Player. Bild und Ton kommen aus der Engine, die Bedienung ist die von Frames:
+/// Skip mit den eingestellten Intervallen, Zeitleiste, Bildvorschau beim Spulen, Ton- und Untertitelwahl.
 struct PlayerView: View {
     let route: PlayerRoute
     @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
-    @State private var player: AVPlayer?
-    @State private var flash: String?
-    @State private var failure: String?
+    @State private var session: PlayerSession?
+    @State private var engineFailed = false
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            if let player {
-                VideoPlayer(player: player)
-                    .ignoresSafeArea()
+            if let session {
+                PlayerStage(route: route, session: session)
+            } else if engineFailed {
+                SignalNotice("Wiedergabe nicht möglich", detail: "Der Player ließ sich auf diesem Gerät nicht starten.")
             }
-            if let failure {
-                SignalNotice("Wiedergabe nicht möglich", detail: failure)
-            }
-            #if !os(tvOS)
-            controls
-            #endif
         }
         .navigationBarBackButtonHidden()
         #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
+        .persistentSystemOverlays(.hidden)
         #endif
-        .task(id: route) {
-            let asset = AVURLAsset(
-                url: route.url,
-                options: route.headers.isEmpty ? nil : ["AVURLAssetHTTPHeaderFieldsKey": route.headers]
-            )
-            let item = AVPlayerItem(asset: asset)
-            let newPlayer = AVPlayer(playerItem: item)
-            player = newPlayer
-            newPlayer.play()
-            // Meldet der Systemplayer einen Fehler, liegt es meist am Dateiformat.
-            for await status in item.publisher(for: \.status).values where status == .failed {
-                failure = "Der Systemplayer kann dieses Format nicht abspielen. MKV-Dateien laufen erst mit dem eigenen Player, der als Nächstes kommt."
-                break
+        .task {
+            guard session == nil else { return }
+            guard let engine = PlayerEngine.shared else {
+                engineFailed = true
+                return
             }
+            let newSession = PlayerSession(engine: engine)
+            session = newSession
+            let resume = model.resumePosition(metaId: route.item.metaId, videoId: route.item.videoId)
+            await newSession.start(route, settings: model.settings, resumeAt: resume)
         }
         .onDisappear {
-            player?.pause()
-            player = nil
+            guard let session else { return }
+            let progress = session.progress(for: route.item)
+            session.stop()
+            Task { await model.saveProgress(progress) }
         }
     }
+}
 
-    #if !os(tvOS)
-    private var controls: some View {
+private struct PlayerStage: View {
+    let route: PlayerRoute
+    let session: PlayerSession
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var controlsVisible = true
+    @State private var panel: Panel?
+    @State private var hideTask: Task<Void, Never>?
+    @FocusState private var focus: FocusTarget?
+
+    private enum Panel {
+        case audio, subtitles
+    }
+
+    private enum FocusTarget: Hashable {
+        case surface, tracks
+    }
+
+    var body: some View {
+        ZStack {
+            AetherPlayerSurface(engine: session.engine)
+                .ignoresSafeArea()
+
+            subtitles
+
+            if let failure = session.failure {
+                SignalNotice("Wiedergabe nicht möglich", detail: failure)
+            } else if session.isBusy || !session.hasPicture {
+                ProgressView()
+                    .tint(Signal.Palette.lime)
+                    .scaleEffect(1.6)
+            }
+
+            surface
+
+            if controlsVisible {
+                controls.transition(.opacity)
+            }
+
+            if let panel {
+                trackPanel(panel)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+        }
+        .animation(Signal.Motion.sheet, value: controlsVisible)
+        .animation(Signal.Motion.sheet, value: panel)
+        .onAppear {
+            focus = .surface
+            scheduleHide()
+        }
+        .onChange(of: session.isPlaying) { _, isPlaying in
+            if isPlaying {
+                scheduleHide()
+            } else {
+                showControls()
+                Task { await model.saveProgress(session.progress(for: route.item)) }
+            }
+        }
+        // Zwischenstand sichern, falls die App während der Wiedergabe beendet wird.
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                guard !Task.isCancelled, session.isPlaying else { continue }
+                await model.saveProgress(session.progress(for: route.item))
+            }
+        }
+        #if os(tvOS) || os(macOS)
+        .onExitCommand {
+            if panel != nil {
+                panel = nil
+                focus = .surface
+            } else if controlsVisible, session.isPlaying {
+                controlsVisible = false
+                focus = .surface
+            } else {
+                dismiss()
+            }
+        }
+        #endif
+    }
+
+    // MARK: Bildfläche
+
+    /// Fängt Eingaben ab, die keinem Bedienelement gelten. Auf dem Fernseher sitzt hier der Fokus:
+    /// links und rechts springen, die Mitte pausiert, hoch und runter holen die Bedienung.
+    private var surface: some View {
+        Button {
+            #if os(tvOS)
+            session.togglePlay()
+            showControls()
+            #else
+            if controlsVisible {
+                controlsVisible = false
+            } else {
+                showControls()
+            }
+            #endif
+        } label: {
+            Color.clear.contentShape(Rectangle())
+        }
+        .buttonStyle(BareButtonStyle())
+        .focused($focus, equals: .surface)
+        .disabled(panel != nil)
+        .ignoresSafeArea()
+        .accessibilityLabel("Wiedergabe")
+        #if os(tvOS)
+        .onMoveCommand { direction in
+            switch direction {
+            case .left: skip(.backward)
+            case .right: skip(.forward)
+            default: showControls()
+            }
+        }
+        .onPlayPauseCommand {
+            session.togglePlay()
+            showControls()
+        }
+        #endif
+    }
+
+    private var subtitles: some View {
         VStack {
-            HStack(alignment: .top) {
+            Spacer()
+            if let text = session.subtitleText {
+                Text(text)
+                    .font(.signal(40, .medium))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .shadow(color: .black, radius: 2, x: 0, y: 1)
+                    .shadow(color: .black.opacity(0.9), radius: 8)
+                    .padding(.horizontal, Signal.pt(160))
+                    // Rückt nach oben, solange die Zeitleiste zu sehen ist.
+                    .padding(.bottom, controlsVisible ? Signal.pt(230) : Signal.pt(70))
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .allowsHitTesting(false)
+        .animation(Signal.Motion.focus, value: controlsVisible)
+    }
+
+    // MARK: Bedienung
+
+    private var controls: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .top, spacing: Signal.pt(24)) {
+                #if !os(tvOS)
                 Button("‹  ZURÜCK") { dismiss() }
                     .buttonStyle(SignalButtonStyle())
-                Spacer()
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text(route.title)
-                        .font(.signal(28, .bold))
-                    if let subtitle = route.subtitle {
-                        Text(subtitle.uppercased())
-                            .font(.signalMono(15))
-                            .foregroundStyle(Signal.Palette.lime)
+                #endif
+                VStack(alignment: .leading, spacing: Signal.pt(6)) {
+                    if let subtitle = route.item.subtitle {
+                        SignalEyebrow(subtitle)
                     }
+                    Text(route.item.name)
+                        .font(.signal(44, .bold))
+                        .tracking(-0.03 * Signal.text(44))
+                        .foregroundStyle(Signal.Palette.text)
+                        .lineLimit(1)
                 }
-                .foregroundStyle(Signal.Palette.text)
-                .shadow(color: .black.opacity(0.8), radius: 8)
+                Spacer(minLength: 0)
+                if let format = session.formatLabel {
+                    SignalBadge(format, kind: .picture)
+                }
             }
-            Spacer()
-            if let flash {
+
+            Spacer(minLength: 0)
+
+            #if !os(tvOS)
+            HStack(spacing: Signal.pt(28)) {
+                Button("«  \(model.settings.skipBackward.label)") { skip(.backward) }
+                    .buttonStyle(SignalButtonStyle())
+                Button(session.isPlaying ? "PAUSE" : "▶  WEITER") {
+                    session.togglePlay()
+                    scheduleHide()
+                }
+                .buttonStyle(SignalButtonStyle(.primary))
+                Button("\(model.settings.skipForward.label)  »") { skip(.forward) }
+                    .buttonStyle(SignalButtonStyle())
+            }
+            Spacer(minLength: 0)
+            #endif
+
+            if let flash = session.flash {
                 Text(flash)
                     .font(.signalMono(26, .bold))
                     .foregroundStyle(Signal.Palette.lime)
                     .shadow(color: .black.opacity(0.8), radius: 8)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    .padding(.bottom, Signal.pt(16))
             }
-            HStack(spacing: Signal.pt(24)) {
-                Button("«  \(model.settings.skipBackward.label)") { skip(.backward) }
-                Button("\(model.settings.skipForward.label)  »") { skip(.forward) }
+
+            ScrubBar(session: session, previewEnabled: model.settings.scrubPreview) { scheduleHide() }
+                .padding(.bottom, Signal.pt(22))
+
+            HStack(spacing: Signal.pt(14)) {
+                #if os(tvOS)
+                Text("◀ \(model.settings.skipBackward.label)   ·   \(model.settings.skipForward.label) ▶")
+                    .font(.signalMono(15))
+                    .foregroundStyle(Signal.Palette.textMuted)
+                #endif
+                Spacer(minLength: 0)
+                if session.audioTracks.count > 1 {
+                    Button("TON") { open(.audio) }
+                        .buttonStyle(SignalButtonStyle())
+                }
+                if !session.subtitleTracks.isEmpty {
+                    Button("UNTERTITEL") { open(.subtitles) }
+                        .buttonStyle(SignalButtonStyle())
+                }
             }
-            .buttonStyle(SignalButtonStyle())
-            // Lässt die Zeitleiste des Systemplayers darunter frei.
-            .padding(.bottom, 72)
+            .focused($focus, equals: .tracks)
+            #if os(tvOS)
+            // Von den Tasten führt „hoch“ zurück ins Bild.
+            .onMoveCommand { direction in
+                if direction == .up { focus = .surface }
+            }
+            #endif
         }
-        .padding(PageInsets.horizontal)
+        .padding(.horizontal, max(20, Signal.pt(80)))
+        .padding(.vertical, max(16, Signal.pt(56)))
+        .background {
+            LinearGradient(
+                stops: [
+                    .init(color: .black.opacity(0.75), location: 0),
+                    .init(color: .clear, location: 0.3),
+                    .init(color: .clear, location: 0.55),
+                    .init(color: .black.opacity(0.85), location: 1),
+                ],
+                startPoint: .top, endPoint: .bottom
+            )
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+        }
     }
-    #endif
+
+    private func trackPanel(_ kind: Panel) -> some View {
+        // Liest den Zähler, damit die Markierung der gewählten Spur nachzieht.
+        let _ = session.trackRevision
+        let tracks = kind == .audio ? session.audioTracks : session.subtitleTracks
+        return HStack(spacing: 0) {
+            Spacer(minLength: 0)
+            VStack(alignment: .leading, spacing: Signal.pt(10)) {
+                SignalEyebrow(kind == .audio ? "Player // Ton" : "Player // Untertitel")
+                    .padding(.bottom, Signal.pt(10))
+                ScrollView {
+                    VStack(spacing: Signal.pt(10)) {
+                        if kind == .subtitles {
+                            trackRow("Aus", isActive: session.subtitlesAreOff) {
+                                session.turnSubtitlesOff()
+                            }
+                        }
+                        ForEach(tracks) { track in
+                            trackRow(track.label, isActive: track.isActive()) {
+                                track.select()
+                            }
+                        }
+                    }
+                    .padding(Signal.pt(10))
+                }
+                .scrollClipDisabled()
+                Button("SCHLIESSEN") {
+                    panel = nil
+                    focus = .surface
+                    scheduleHide()
+                }
+                .buttonStyle(SignalButtonStyle())
+            }
+            .padding(Signal.pt(32))
+            .frame(width: max(300, Signal.pt(620)))
+            .frame(maxHeight: .infinity, alignment: .topLeading)
+            .background(Signal.Palette.sidebar.ignoresSafeArea())
+            .overlay(alignment: .leading) {
+                Rectangle().fill(Signal.Palette.lime).frame(width: 3).ignoresSafeArea()
+            }
+            #if os(tvOS) || os(macOS)
+            .focusSection()
+            #endif
+        }
+    }
+
+    private func trackRow(_ label: String, isActive: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: Signal.pt(14)) {
+                Circle()
+                    .fill(isActive ? Signal.Palette.lime : Color.clear)
+                    .overlay { Circle().stroke(isActive ? Signal.Palette.lime : Signal.Palette.border, lineWidth: 1) }
+                    .frame(width: 10, height: 10)
+                Text(label)
+                    .font(.signal(24, isActive ? .semibold : .medium))
+                    .foregroundStyle(Signal.Palette.text)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, Signal.pt(20))
+            .frame(maxWidth: .infinity, minHeight: max(44, Signal.pt(64)), alignment: .leading)
+            .signalPanel(active: isActive)
+        }
+        .buttonStyle(SignalCardButtonStyle(radius: 8, grows: false))
+    }
+
+    // MARK: Abläufe
 
     private func skip(_ direction: SkipDirection) {
-        guard let player else { return }
-        let position = player.currentTime().seconds
-        guard position.isFinite else { return }
-        let total = player.currentItem?.duration.seconds
-        let duration = total.flatMap { $0.isFinite ? $0 : nil }
-        let target = model.settings.seekTarget(from: position, duration: duration, direction: direction)
-        player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        session.skip(direction, settings: model.settings)
+        showControls()
+    }
 
-        let interval = direction == .forward ? model.settings.skipForward : model.settings.skipBackward
-        withAnimation(Signal.Motion.press) {
-            flash = "\(direction == .forward ? "+" : "−")\(interval.label)"
+    private func open(_ kind: Panel) {
+        hideTask?.cancel()
+        panel = kind
+    }
+
+    private func showControls() {
+        controlsVisible = true
+        scheduleHide()
+    }
+
+    /// Blendet die Bedienung nach ein paar Sekunden aus, solange der Film läuft und nichts offen ist.
+    private func scheduleHide() {
+        hideTask?.cancel()
+        hideTask = Task {
+            try? await Task.sleep(for: .seconds(4))
+            guard !Task.isCancelled, session.isPlaying, panel == nil, session.scrubTime == nil else { return }
+            controlsVisible = false
+            focus = .surface
         }
-        Task {
-            try? await Task.sleep(for: .milliseconds(900))
-            withAnimation(Signal.Motion.sheet) { flash = nil }
+    }
+}
+
+/// Taste ohne eigene Darstellung, für die unsichtbare Fläche über dem Bild.
+private struct BareButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+    }
+}
+
+// MARK: Zeitleiste
+
+/// Zeitleiste mit Puffer, Position und der Vorschau beim Spulen: Bild und Zeitmarke über dem Ziel.
+private struct ScrubBar: View {
+    let session: PlayerSession
+    let previewEnabled: Bool
+    let onInteraction: () -> Void
+
+    private var barHeight: CGFloat { max(6, Signal.pt(10)) }
+    private var handleSize: CGFloat { max(14, Signal.pt(22)) }
+    private var previewWidth: CGFloat { max(150, Signal.pt(300)) }
+
+    var body: some View {
+        let duration = session.duration
+        let shown = session.scrubTime ?? session.time
+        let fraction = duration > 0 ? min(1, max(0, shown / duration)) : 0
+        let bufferedFraction = duration > 0 ? min(1, max(0, session.buffered / duration)) : 0
+
+        VStack(spacing: Signal.pt(14)) {
+            GeometryReader { proxy in
+                let width = proxy.size.width
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Signal.Palette.line)
+                    Capsule().fill(Signal.Palette.lime.opacity(0.35)).frame(width: width * bufferedFraction)
+                    Capsule().fill(Signal.Palette.limeFill).frame(width: width * fraction)
+                }
+                .frame(height: barHeight)
+                .overlay(alignment: .leading) {
+                    Circle()
+                        .fill(Signal.Palette.lime)
+                        .frame(width: handleSize, height: handleSize)
+                        .shadow(color: Signal.Palette.lime.opacity(0.6), radius: 12)
+                        .offset(x: width * fraction - handleSize / 2)
+                }
+                .overlay(alignment: .bottomLeading) {
+                    if session.scrubTime != nil {
+                        preview(time: shown)
+                            .offset(
+                                x: min(max(0, width * fraction - previewWidth / 2), max(0, width - previewWidth)),
+                                y: -(barHeight + Signal.pt(24))
+                            )
+                            .transition(.opacity)
+                    }
+                }
+                .animation(Signal.Motion.focus, value: session.scrubTime != nil)
+                .contentShape(Rectangle().inset(by: -18))
+                .scrubGesture(width: width, duration: duration, session: session, previewEnabled: previewEnabled, onInteraction: onInteraction)
+            }
+            .frame(height: barHeight)
+
+            HStack {
+                Text(formatPlaybackTime(shown))
+                Spacer()
+                Text(duration > 0 ? "−" + formatPlaybackTime(max(0, duration - shown)) : "")
+            }
+            .font(.signalMono(19))
+            .foregroundStyle(Signal.Palette.text)
         }
+    }
+
+    private func preview(time: Double) -> some View {
+        VStack(alignment: .leading, spacing: Signal.pt(6)) {
+            Text(formatPlaybackTime(time))
+                .font(.signalMono(20, .bold))
+                .foregroundStyle(Signal.Palette.background)
+                .padding(.horizontal, Signal.pt(10))
+                .padding(.vertical, Signal.pt(4))
+                .background(Signal.Palette.limeFill, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+            if previewEnabled, let image = session.scrubImage {
+                Image(decorative: image, scale: 1)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: previewWidth, height: previewWidth * 9 / 16)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Signal.Palette.lime, lineWidth: 2)
+                    }
+                    .shadow(color: .black.opacity(0.7), radius: 24, y: 12)
+                    .shadow(color: Signal.Palette.lime.opacity(0.3), radius: 20)
+                    .transition(.opacity)
+            }
+        }
+        .frame(width: previewWidth, alignment: .leading)
+        .animation(Signal.Motion.focus, value: session.scrubImage != nil)
+    }
+}
+
+extension View {
+    /// Ziehen auf der Zeitleiste spult. Auf dem Fernseher übernehmen das die Richtungstasten.
+    @ViewBuilder
+    fileprivate func scrubGesture(
+        width: CGFloat, duration: Double, session: PlayerSession, previewEnabled: Bool, onInteraction: @escaping () -> Void
+    ) -> some View {
+        #if os(tvOS)
+        self
+        #else
+        self.gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    guard duration > 0, width > 0 else { return }
+                    session.scrub(to: Double(value.location.x / width) * duration, preview: previewEnabled)
+                    onInteraction()
+                }
+                .onEnded { _ in
+                    session.commitScrub()
+                    onInteraction()
+                }
+        )
+        #endif
     }
 }
 #endif

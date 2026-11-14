@@ -102,6 +102,23 @@ public final class AppModel {
         }
     }
 
+    /// Position in Sekunden, an der dieses Video zuletzt verlassen wurde.
+    public func resumePosition(metaId: String, videoId: String) -> Double? {
+        library.resumePosition(metaId: metaId, videoId: videoId)
+    }
+
+    /// Meldet den Wiedergabestand ans Stremio-Konto, damit „Weiter ansehen“ auf allen Geräten stimmt.
+    /// Schlägt das fehl, läuft die Wiedergabe ungestört weiter. Der nächste Versuch kommt von selbst.
+    public func saveProgress(_ progress: WatchProgress) async {
+        guard progress.isWorthSaving, let key = session?.authKey else { return }
+        guard let saved = try? await api.saveProgress(progress, authKey: key) else { return }
+        if let index = library.firstIndex(where: { $0.id == saved.id }) {
+            library[index] = saved
+        } else {
+            library.append(saved)
+        }
+    }
+
     public func saveSettings() {
         store.saveSettings(settings)
     }

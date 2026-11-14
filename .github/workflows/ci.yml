@@ -2,6 +2,8 @@ name: CI
 
 on:
   push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
 
 concurrency:
@@ -19,7 +21,9 @@ jobs:
 
   apps:
     name: App bauen (${{ matrix.name }})
-    runs-on: macos-15
+    # Die Player-Engine verlangt Xcode 27.
+    runs-on: xcode-27
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -32,6 +36,7 @@ jobs:
             destination: platform=macOS
     steps:
       - uses: actions/checkout@v4
+      - run: xcodebuild -version
       - run: brew install xcodegen
       - run: xcodegen generate
       - run: >
