@@ -30,8 +30,11 @@ jobs:
         include:
           - name: iOS
             destination: generic/platform=iOS Simulator
+          # Für den Fernseher wird das Gerät gebaut, nicht der Simulator: die Dolby-Vision-Bibliothek
+          # der Player-Engine bringt für den tvOS-Simulator nur arm64 mit, der allgemeine
+          # Simulator-Build verlangt aber auch x86_64.
           - name: tvOS
-            destination: generic/platform=tvOS Simulator
+            destination: generic/platform=tvOS
           - name: macOS
             destination: platform=macOS
     steps:
