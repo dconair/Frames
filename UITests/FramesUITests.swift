@@ -77,6 +77,69 @@ final class FramesUITests: XCTestCase {
         }
     }
 
+    // MARK: Vorschau
+
+    /// Ein Rundgang mit dem echten Konto für die Bildschirmaufnahme: Start, Home, Filme, Detail, Quellen, Player.
+    /// Läuft nur, wenn die Aufnahme ausdrücklich verlangt ist.
+    func testVorschauMitKonto() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["FRAMES_VORSCHAU"] == "1",
+              let email = environment["FRAMES_EMAIL"], !email.isEmpty,
+              let password = environment["FRAMES_PASSWORD"], !password.isEmpty else {
+            throw XCTSkip("Keine Vorschau verlangt.")
+        }
+        let app = XCUIApplication()
+        app.launchEnvironment = ["FRAMES_TEST_EMAIL": email, "FRAMES_TEST_PASSWORD": password]
+        app.launch()
+        XCTAssertTrue(waitForContent(in: app, seconds: 90), "Nach der Anmeldung sind keine Kataloge erschienen.")
+        sleep(5)
+        browse(in: app)
+
+        XCTAssertTrue(openSection("Filme", in: app), "Der Bereich Filme ließ sich nicht öffnen.")
+        sleep(5)
+        openFirstTitle(in: app)
+        sleep(6)
+
+        let play = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'ABSPIELEN'")).firstMatch
+        XCTAssertTrue(play.waitForExistence(timeout: 20), "Auf der Detailseite fehlt „Abspielen“.")
+        activate(play, in: app)
+
+        let source = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'EMPFOHLEN'")).firstMatch
+        let hasSource = source.waitForExistence(timeout: 40)
+        print("FRAMES-UI Vorschau: Quellen gefunden=\(hasSource)")
+        XCTAssertTrue(hasSource, "Für den Film kam keine abspielbare Quelle.")
+        sleep(4)
+        guard hasSource else { return }
+        select(source, in: app)
+
+        var picture = false
+        for _ in 0..<90 where !picture {
+            picture = app.activityIndicators.count == 0 && !app.staticTexts["WIEDERGABE NICHT MÖGLICH"].exists
+            sleep(1)
+        }
+        sleep(25)
+        print("FRAMES-UI Vorschau: Fehlermeldung im Player=\(app.staticTexts["WIEDERGABE NICHT MÖGLICH"].exists)")
+        #if os(tvOS)
+        XCUIRemote.shared.press(.right)
+        sleep(6)
+        XCUIRemote.shared.press(.right)
+        XCUIRemote.shared.press(.right)
+        sleep(8)
+        XCUIRemote.shared.press(.select)
+        sleep(4)
+        #else
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap()
+        sleep(2)
+        let forward = app.buttons.matching(NSPredicate(format: "label CONTAINS '»'")).firstMatch
+        if forward.exists, forward.isHittable {
+            forward.tap()
+            sleep(6)
+        }
+        sleep(6)
+        #endif
+        XCTAssertFalse(app.staticTexts["WIEDERGABE NICHT MÖGLICH"].exists, "Der Player meldet einen Fehler.")
+    }
+
     // MARK: Player
 
     /// Spielt eine frei verfügbare MKV-Datei an. Das ist der Behälter, in dem die meisten Debrid-Dateien kommen.
@@ -201,6 +264,18 @@ final class FramesUITests: XCTestCase {
         sleep(2)
     }
 
+    private func select(_ element: XCUIElement, in app: XCUIApplication) {
+        XCUIRemote.shared.press(.select)
+    }
+
+    private func browse(in app: XCUIApplication) {
+        let remote = XCUIRemote.shared
+        for button in [XCUIRemote.Button.right, .right, .right, .down, .right, .right, .up, .left, .left, .left, .left, .left] {
+            remote.press(button)
+            sleep(1)
+        }
+    }
+
     private func openSection(_ name: String, in app: XCUIApplication) -> Bool {
         let remote = XCUIRemote.shared
         for _ in 0..<8 where !sections.contains(focusedLabel(in: app)) {
@@ -239,6 +314,17 @@ final class FramesUITests: XCTestCase {
     private func activate(_ element: XCUIElement, in app: XCUIApplication) {
         if !element.isHittable { app.swipeUp() }
         element.tap()
+    }
+
+    private func select(_ element: XCUIElement, in app: XCUIApplication) {
+        element.tap()
+    }
+
+    private func browse(in app: XCUIApplication) {
+        app.swipeUp()
+        sleep(2)
+        app.swipeDown()
+        sleep(2)
     }
 
     private func goBack(in app: XCUIApplication) {

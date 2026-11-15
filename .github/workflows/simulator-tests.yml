@@ -38,9 +38,11 @@ jobs:
           import json, sys
           runtime, device = sys.argv[1], sys.argv[2]
           devices = json.load(sys.stdin)["devices"]
-          found = [d["udid"] for key in sorted(devices, reverse=True) if runtime in key
+          found = [d for key in sorted(devices, reverse=True) if runtime in key
                    for d in devices[key] if device in d["name"]]
-          print(found[0] if found else "")' "${{ matrix.runtime }}" "${{ matrix.device }}"
+          # Ein gewöhnliches Gerät vorziehen, kein Sondermodell.
+          found.sort(key=lambda d: 0 if d["name"].endswith(" Pro") or "4K" in d["name"] else 1)
+          print(found[0]["udid"] if found else "")' "${{ matrix.runtime }}" "${{ matrix.device }}"
           }
           UDID=$(pick)
           if [ -z "$UDID" ]; then
@@ -65,6 +67,35 @@ jobs:
             | tee xcodebuild.log \
             | grep -E "FRAMES-UI|error:|Test Case|Test Suite|TEST (SUCCEEDED|FAILED)|Executed|BUILD FAILED|Testing failed" || true
           grep -q "TEST SUCCEEDED" xcodebuild.log
+      - name: Vorschau mit dem Konto aufnehmen
+        env:
+          TEST_RUNNER_FRAMES_EMAIL: ${{ secrets.FRAMES_EMAIL }}
+          TEST_RUNNER_FRAMES_PASSWORD: ${{ secrets.FRAMES_PASSWORD }}
+          TEST_RUNNER_FRAMES_VORSCHAU: "1"
+        run: |
+          [ -n "$TEST_RUNNER_FRAMES_EMAIL" ] || exit 0
+          mkdir -p vorschau
+          xcrun simctl io "$UDID" recordVideo --codec h264 --force "vorschau/vorschau-${{ matrix.platform }}.mp4" &
+          AUFNAHME=$!
+          sleep 3
+          xcodebuild test \
+            -project Frames.xcodeproj \
+            -scheme Frames \
+            -destination "id=$UDID" \
+            -only-testing:FramesUITests/FramesUITests/testVorschauMitKonto \
+            -skipPackagePluginValidation 2>&1 \
+            | grep -E "FRAMES-UI|error:|Test Case|TEST (SUCCEEDED|FAILED)" || true
+          kill -INT $AUFNAHME
+          wait $AUFNAHME || true
+          ls -la vorschau
+      # Die Aufnahme zeigt das eigene Konto, deshalb bleibt sie nur einen Tag liegen.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vorschau-${{ matrix.platform }}
+          path: vorschau
+          retention-days: 1
+          if-no-files-found: ignore
       - name: Bildschirmfotos herausziehen
         if: always()
         run: |

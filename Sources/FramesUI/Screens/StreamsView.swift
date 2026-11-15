@@ -8,6 +8,7 @@ struct StreamsView: View {
     @Environment(AppModel.self) private var model
     @State private var streams: [SourcedStream]?
     @State private var hiddenCount = 0
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         ScrollView {
@@ -30,6 +31,12 @@ struct StreamsView: View {
                                 ? "Deine Addons liefern hierfür nur Torrents. Frames spielt direkte Links ab, wie sie ein Debrid-Addon liefert."
                                 : "Keines deiner Addons hat hierfür einen Stream."
                         )
+                        #if os(tvOS)
+                        // Ohne ein fokussierbares Element käme man auf dem Fernseher von dieser Seite nicht zurück.
+                        Button("ZURÜCK") { dismiss() }
+                            .buttonStyle(SignalButtonStyle(.primary))
+                            .frame(maxWidth: .infinity)
+                        #endif
                     } else {
                         LazyVStack(spacing: Signal.pt(10)) {
                             ForEach(Array(streams.enumerated()), id: \.element.id) { position, item in
