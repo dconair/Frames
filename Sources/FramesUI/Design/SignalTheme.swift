@@ -2,34 +2,124 @@
 import SwiftUI
 import CoreText
 
-/// Das Signal-Design: Graphit, Limette, Space Grotesk und JetBrains Mono, weiche Bewegung.
-/// Alle Werte stammen aus den abgenommenen Entwürfen.
+/// Ein Farbthema. Jedes Thema bringt Flächen, Text und die drei Farbcodes mit.
+public enum SignalColorTheme: String, CaseIterable, Sendable {
+    case limette, phosphor
+
+    public var label: String {
+        switch self {
+        case .limette: return "LIMETTE"
+        case .phosphor: return "PHOSPHOR"
+        }
+    }
+
+    var colors: SignalColors {
+        switch self {
+        case .limette:
+            return SignalColors(
+                background: 0x0E1012, panelTop: 0x20252B, panelBottom: 0x121518, panelActive: 0x1C2025,
+                sidebarTop: 0x191C20, sidebarBottom: 0x0F1113, line: 0x2A2F36, border: 0x4A515B,
+                text: 0xE8EAED, textSoft: 0xC4CAD2, textMuted: 0xAAB2BC,
+                accent: 0xC6F24E, accentTop: 0xDCFF73, accentBottom: 0xA9D62F,
+                picture: 0xA895FF, sound: 0x5FE0E6
+            )
+        case .phosphor:
+            return SignalColors(
+                background: 0x090E0B, panelTop: 0x19241D, panelBottom: 0x0D1410, panelActive: 0x17211B,
+                sidebarTop: 0x131B16, sidebarBottom: 0x090E0B, line: 0x223128, border: 0x3F5548,
+                text: 0xE3EDE6, textSoft: 0xBDCDC3, textMuted: 0x9CAFA3,
+                accent: 0x4DF29A, accentTop: 0x7CFFB8, accentBottom: 0x2BD47C,
+                picture: 0xE5F06A, sound: 0x6CCBFF
+            )
+        }
+    }
+}
+
+struct SignalColors {
+    let background, panelTop, panelBottom, panelActive, sidebarTop, sidebarBottom, line, border: UInt32
+    let text, textSoft, textMuted, accent, accentTop, accentBottom, picture, sound: UInt32
+}
+
+/// Ein Schriftpaar: eine Schrift für Titel und Fließtext, eine Mono für Metadaten.
+public enum SignalTypeface: String, CaseIterable, Sendable {
+    /// Space Grotesk und JetBrains Mono.
+    case standard
+    /// Chakra Petch und Azeret Mono.
+    case konsole
+
+    public var label: String {
+        switch self {
+        case .standard: return "STANDARD"
+        case .konsole: return "KONSOLE"
+        }
+    }
+}
+
+/// Das gewählte Erscheinungsbild. Views, die Farben oder Schriften aus `Signal` lesen,
+/// zeichnen sich bei einer Änderung von selbst neu. Die Wahl bleibt über Neustarts erhalten.
+@Observable
+public final class SignalAppearance: @unchecked Sendable {
+    public static let shared = SignalAppearance()
+
+    private static let themeKey = "frames.appearance.theme"
+    private static let typefaceKey = "frames.appearance.typeface"
+
+    private var storedTheme: SignalColorTheme
+    private var storedTypeface: SignalTypeface
+
+    public var theme: SignalColorTheme {
+        get { storedTheme }
+        set {
+            storedTheme = newValue
+            UserDefaults.standard.set(newValue.rawValue, forKey: Self.themeKey)
+        }
+    }
+
+    public var typeface: SignalTypeface {
+        get { storedTypeface }
+        set {
+            storedTypeface = newValue
+            UserDefaults.standard.set(newValue.rawValue, forKey: Self.typefaceKey)
+        }
+    }
+
+    private init() {
+        let defaults = UserDefaults.standard
+        storedTheme = defaults.string(forKey: Self.themeKey).flatMap(SignalColorTheme.init(rawValue:)) ?? .limette
+        storedTypeface = defaults.string(forKey: Self.typefaceKey).flatMap(SignalTypeface.init(rawValue:)) ?? .standard
+    }
+}
+
+/// Das Signal-Design: dunkle Flächen, eine Signalfarbe, Mono für Metadaten, weiche Bewegung.
+/// Farben und Schriften folgen dem gewählten Erscheinungsbild.
 public enum Signal {
     public enum Palette {
-        public static let background = Color(hex: 0x0E1012)
-        public static let panelTop = Color(hex: 0x20252B)
-        public static let panelBottom = Color(hex: 0x121518)
-        public static let panelActive = Color(hex: 0x1C2025)
-        public static let sidebarTop = Color(hex: 0x191C20)
-        public static let sidebarBottom = Color(hex: 0x0F1113)
-        public static let line = Color(hex: 0x2A2F36)
-        public static let border = Color(hex: 0x4A515B)
-        public static let text = Color(hex: 0xE8EAED)
-        public static let textSoft = Color(hex: 0xC4CAD2)
-        public static let textMuted = Color(hex: 0xAAB2BC)
-        /// Signalfarbe und Farbcode für die Auflösung.
-        public static let lime = Color(hex: 0xC6F24E)
-        public static let limeTop = Color(hex: 0xDCFF73)
-        public static let limeBottom = Color(hex: 0xA9D62F)
+        private static var colors: SignalColors { SignalAppearance.shared.theme.colors }
+
+        public static var background: Color { Color(hex: colors.background) }
+        public static var panelTop: Color { Color(hex: colors.panelTop) }
+        public static var panelBottom: Color { Color(hex: colors.panelBottom) }
+        public static var panelActive: Color { Color(hex: colors.panelActive) }
+        public static var sidebarTop: Color { Color(hex: colors.sidebarTop) }
+        public static var sidebarBottom: Color { Color(hex: colors.sidebarBottom) }
+        public static var line: Color { Color(hex: colors.line) }
+        public static var border: Color { Color(hex: colors.border) }
+        public static var text: Color { Color(hex: colors.text) }
+        public static var textSoft: Color { Color(hex: colors.textSoft) }
+        public static var textMuted: Color { Color(hex: colors.textMuted) }
+        /// Signalfarbe des Themas und Farbcode für die Auflösung. Im Thema Limette ist sie limettengrün.
+        public static var lime: Color { Color(hex: colors.accent) }
+        public static var limeTop: Color { Color(hex: colors.accentTop) }
+        public static var limeBottom: Color { Color(hex: colors.accentBottom) }
         /// Farbcode für Bildangaben wie Dolby Vision.
-        public static let violet = Color(hex: 0xA895FF)
+        public static var violet: Color { Color(hex: colors.picture) }
         /// Farbcode für Tonangaben wie Atmos.
-        public static let cyan = Color(hex: 0x5FE0E6)
+        public static var cyan: Color { Color(hex: colors.sound) }
         public static let danger = Color(hex: 0xFF7A66)
 
-        public static let panel = LinearGradient(colors: [panelTop, panelBottom], startPoint: .top, endPoint: .bottom)
-        public static let sidebar = LinearGradient(colors: [sidebarTop, sidebarBottom], startPoint: .top, endPoint: .bottom)
-        public static let limeFill = LinearGradient(colors: [limeTop, limeBottom], startPoint: .top, endPoint: .bottom)
+        public static var panel: LinearGradient { LinearGradient(colors: [panelTop, panelBottom], startPoint: .top, endPoint: .bottom) }
+        public static var sidebar: LinearGradient { LinearGradient(colors: [sidebarTop, sidebarBottom], startPoint: .top, endPoint: .bottom) }
+        public static var limeFill: LinearGradient { LinearGradient(colors: [limeTop, limeBottom], startPoint: .top, endPoint: .bottom) }
     }
 
     /// Bewegung, Fassung B „weich“.
@@ -84,7 +174,11 @@ public enum SignalWeight: CGFloat, Sendable {
 
 public enum SignalFonts {
     private static let registered: Bool = {
-        for name in ["SpaceGrotesk", "JetBrainsMono"] {
+        let files = [
+            "SpaceGrotesk", "JetBrainsMono", "AzeretMono",
+            "ChakraPetch-Regular", "ChakraPetch-Medium", "ChakraPetch-SemiBold", "ChakraPetch-Bold",
+        ]
+        for name in files {
             guard let url = Bundle.module.url(forResource: name, withExtension: "ttf") else { continue }
             CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
         }
@@ -96,7 +190,7 @@ public enum SignalFonts {
         _ = registered
     }
 
-    /// Beide Schriften sind variable Fonts. Die Strichstärke wird über die Achse `wght` gesetzt.
+    /// Für variable Fonts. Die Strichstärke wird über die Achse `wght` gesetzt.
     static func make(family: String, size: CGFloat, weight: SignalWeight) -> Font {
         register()
         let weightAxis = NSNumber(value: 0x7767_6874)
@@ -107,17 +201,41 @@ public enum SignalFonts {
         let descriptor = CTFontDescriptorCreateWithAttributes(attributes as CFDictionary)
         return Font(CTFontCreateWithFontDescriptor(descriptor, size, nil))
     }
+
+    /// Chakra Petch liegt als einzelne Schnitte vor, einer je Strichstärke.
+    static func makeChakraPetch(size: CGFloat, weight: SignalWeight) -> Font {
+        register()
+        let cut: String
+        switch weight {
+        case .regular: cut = "Regular"
+        case .medium: cut = "Medium"
+        case .semibold: cut = "SemiBold"
+        case .bold: cut = "Bold"
+        }
+        return Font(CTFontCreateWithName("ChakraPetch-\(cut)" as CFString, size, nil))
+    }
 }
 
 extension Font {
-    /// Space Grotesk für Titel und Fließtext. Die Größe ist ein Maß aus dem tvOS-Entwurf.
+    /// Schrift für Titel und Fließtext. Die Größe ist ein Maß aus dem tvOS-Entwurf.
     public static func signal(_ tvSize: CGFloat, _ weight: SignalWeight = .regular) -> Font {
-        SignalFonts.make(family: "Space Grotesk", size: Signal.text(tvSize), weight: weight)
+        switch SignalAppearance.shared.typeface {
+        case .standard:
+            return SignalFonts.make(family: "Space Grotesk", size: Signal.text(tvSize), weight: weight)
+        case .konsole:
+            return SignalFonts.makeChakraPetch(size: Signal.text(tvSize), weight: weight)
+        }
     }
 
-    /// JetBrains Mono für Metadaten, Badges und Tasten.
+    /// Mono für Metadaten, Badges und Tasten.
     public static func signalMono(_ tvSize: CGFloat, _ weight: SignalWeight = .medium) -> Font {
-        SignalFonts.make(family: "JetBrains Mono", size: Signal.text(tvSize), weight: weight)
+        switch SignalAppearance.shared.typeface {
+        case .standard:
+            return SignalFonts.make(family: "JetBrains Mono", size: Signal.text(tvSize), weight: weight)
+        case .konsole:
+            // Azeret Mono läuft breiter und wird deshalb etwas kleiner gesetzt.
+            return SignalFonts.make(family: "Azeret Mono", size: (Signal.text(tvSize) * 0.93).rounded(), weight: weight)
+        }
     }
 }
 #endif
