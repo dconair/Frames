@@ -4,7 +4,8 @@ import XCTest
 /// Zeilen mit „FRAMES-UI“ landen im Protokoll der CI, die Bilder im Ergebnispaket.
 final class FramesUITests: XCTestCase {
     private let sections = ["Home", "Filme", "Serien", "Bibliothek", "Suche", "Addons", "Einstellungen"]
-    private let sampleVideo = "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4"
+    private let sampleMP4 = "https://media.w3.org/2010/05/sintel/trailer.mp4"
+    private let sampleMKV = "https://test-videos.co.uk/vids/jellyfish/mkv/1080/Jellyfish_1080_10s_5MB.mkv"
 
     override func setUp() {
         continueAfterFailure = true
@@ -19,6 +20,7 @@ final class FramesUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(waitForContent(in: app, seconds: 60), "Auf Home sind keine Kataloge erschienen.")
+        sleep(5)
         snap("01-Home")
         note("Home", texts(in: app))
 
@@ -77,11 +79,30 @@ final class FramesUITests: XCTestCase {
 
     // MARK: Player
 
+    /// Spielt eine frei verfügbare MKV-Datei an. Das ist der Behälter, in dem die meisten Debrid-Dateien kommen.
+    func testPlayerSpieltMKV() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-frames-gast"]
+        app.launchEnvironment = ["FRAMES_TEST_VIDEO": sampleMKV]
+        app.launch()
+
+        let status = app.descendants(matching: .any)["player-status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 30), "Der Player ist nicht erschienen.")
+        var hasPicture = false
+        for _ in 0..<60 where !hasPicture {
+            hasPicture = status.label.contains("bild=true")
+            if !hasPicture { sleep(1) }
+        }
+        print("FRAMES-UI MKV nach dem Start: \(status.label)")
+        XCTAssertTrue(hasPicture, "Der Player zeigt kein Bild: \(status.label)")
+        snap("20-Player-MKV")
+    }
+
     /// Spielt ein frei verfügbares Video ab und prüft, dass Bild und Zeit laufen.
     func testPlayerSpieltVideo() {
         let app = XCUIApplication()
         app.launchArguments = ["-frames-gast"]
-        app.launchEnvironment = ["FRAMES_TEST_VIDEO": sampleVideo]
+        app.launchEnvironment = ["FRAMES_TEST_VIDEO": sampleMP4]
         app.launch()
 
         let status = app.descendants(matching: .any)["player-status"]
@@ -183,9 +204,11 @@ final class FramesUITests: XCTestCase {
     private func openSection(_ name: String, in app: XCUIApplication) -> Bool {
         let remote = XCUIRemote.shared
         for _ in 0..<8 where !sections.contains(focusedLabel(in: app)) {
+            print("FRAMES-UI Fokus auf dem Weg zur Seitenleiste: „\(focusedLabel(in: app))“")
             remote.press(.left)
             sleep(1)
         }
+        print("FRAMES-UI Fokus in der Seitenleiste: „\(focusedLabel(in: app))“, gesucht \(name)")
         for _ in 0..<8 where focusedLabel(in: app) != name {
             remote.press(.down)
             sleep(1)
