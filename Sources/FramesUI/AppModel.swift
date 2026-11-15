@@ -17,6 +17,8 @@ public final class AppModel {
     public private(set) var isBusy = false
     public private(set) var lastSync: Date?
     public var errorMessage: String?
+    /// Solange der Player läuft, gehört ihm der ganze Bildschirm: Seitenleiste und untere Leiste weichen.
+    public var isPlayerActive = false
     public var settings: PlaybackSettings
 
     public let content: ContentService

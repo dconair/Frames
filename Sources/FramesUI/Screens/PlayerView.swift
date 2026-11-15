@@ -36,7 +36,9 @@ struct PlayerView: View {
             let resume = model.resumePosition(metaId: route.item.metaId, videoId: route.item.videoId)
             await newSession.start(route, settings: model.settings, resumeAt: resume)
         }
+        .onAppear { model.isPlayerActive = true }
         .onDisappear {
+            model.isPlayerActive = false
             guard let session else { return }
             let progress = session.progress(for: route.item)
             session.stop()
