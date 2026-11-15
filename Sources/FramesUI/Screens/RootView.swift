@@ -84,19 +84,26 @@ enum AppSection: String, CaseIterable, Identifiable {
 /// Seitenleiste links auf Fernseher, iPad und Mac. Auf schmalen Geräten eine Leiste unten.
 struct MainView: View {
     @State private var section: AppSection = .home
+    @Environment(AppModel.self) private var model
 
     var body: some View {
         GeometryReader { proxy in
             if proxy.size.width >= 700 {
                 HStack(spacing: 0) {
-                    Sidebar(section: $section)
-                        .frame(width: Signal.pt(280) + 40)
+                    if !model.isPlayerActive {
+                        Sidebar(section: $section)
+                            .frame(width: Signal.pt(280) + 40)
+                            .transition(.move(edge: .leading))
+                    }
                     content
                 }
+                .animation(Signal.Motion.sheet, value: model.isPlayerActive)
             } else {
                 VStack(spacing: 0) {
                     content
-                    BottomBar(section: $section)
+                    if !model.isPlayerActive {
+                        BottomBar(section: $section)
+                    }
                 }
             }
         }
