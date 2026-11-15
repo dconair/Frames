@@ -1,0 +1,40 @@
+name: Konto-Check
+
+# Prüft die Stremio-Anbindung gegen die echten Server, auf Wunsch mit einem echten Konto.
+# Dafür in den Einstellungen des Repos unter „Secrets and variables › Actions“ zwei Secrets anlegen:
+#   FRAMES_EMAIL     E-Mail des Stremio-Kontos
+#   FRAMES_PASSWORD  Passwort des Stremio-Kontos
+# Ohne Secrets läuft die Prüfung mit der Grundausstattung an Addons.
+# Das Protokoll nennt weder Adressen noch die Namen deiner Addons oder Titel.
+on:
+  workflow_dispatch:
+    inputs:
+      titel:
+        description: "IMDb-id zum Prüfen der Streams, z. B. tt0133093 oder tt0903747:1:1"
+        required: false
+        default: tt0133093
+  pull_request:
+    paths:
+      - "Sources/FramesCore/**"
+      - "Sources/frames-check/**"
+      - ".github/workflows/konto-check.yml"
+
+jobs:
+  check:
+    name: Anbindung gegen die echten Server
+    runs-on: ubuntu-latest
+    container: swift:6.0
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift build --product frames-check
+      - name: frames-check
+        env:
+          FRAMES_EMAIL: ${{ secrets.FRAMES_EMAIL }}
+          FRAMES_PASSWORD: ${{ secrets.FRAMES_PASSWORD }}
+          TITEL: ${{ inputs.titel || 'tt0133093' }}
+        run: |
+          if [ -n "$FRAMES_EMAIL" ]; then
+            swift run frames-check "$TITEL"
+          else
+            swift run frames-check
+          fi

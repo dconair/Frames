@@ -29,6 +29,8 @@ let package = Package(
             dependencies: uiDependencies,
             resources: [.process("Resources")]
         ),
+        // Prüft die Anbindung gegen die echten Server: swift run frames-check
+        .executableTarget(name: "frames-check", dependencies: ["FramesCore"]),
         .testTarget(
             name: "FramesCoreTests",
             dependencies: ["FramesCore"],

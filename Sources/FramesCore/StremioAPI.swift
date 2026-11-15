@@ -40,9 +40,10 @@ public struct StremioAPI: Sendable {
     }
 
     /// Die im Konto installierten Addons in der Reihenfolge des Nutzers.
-    public func addonCollection(authKey: String) async throws -> [InstalledAddon] {
+    /// Ohne `authKey` liefert Stremio die Grundausstattung, die jedes neue Konto bekommt.
+    public func addonCollection(authKey: String?) async throws -> [InstalledAddon] {
         let result: AddonCollectionResult = try await call("addonCollectionGet", body: [
-            "type": "AddonCollectionGet", "authKey": authKey, "update": true,
+            "type": "AddonCollectionGet", "authKey": authKey ?? NSNull(), "update": true,
         ])
         return result.addons
     }
