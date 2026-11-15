@@ -3,7 +3,12 @@ import XCTest
 /// Startet Frames im Simulator und bedient die App wie ein Mensch. Alles läuft gegen die echten Server.
 /// Zeilen mit „FRAMES-UI“ landen im Protokoll der CI, die Bilder im Ergebnispaket.
 final class FramesUITests: XCTestCase {
+    #if os(tvOS)
     private let sections = ["Home", "Filme", "Serien", "Bibliothek", "Suche", "Addons", "Einstellungen"]
+    #else
+    /// Untere Leiste und die Auswahl oben auf der Seite.
+    private let sections = ["Home", "Suche", "Bibliothek", "Mehr", "ALLE", "FILME", "SERIEN", "EINSTELLUNGEN", "ADDONS"]
+    #endif
     private let sampleMP4 = "https://media.w3.org/2010/05/sintel/trailer.mp4"
     private let sampleMKV = "https://test-videos.co.uk/vids/jellyfish/mkv/1080/Jellyfish_1080_10s_5MB.mkv"
 
@@ -18,6 +23,7 @@ final class FramesUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-frames-gast"]
         app.launch()
+        snap("00-Start")
 
         XCTAssertTrue(waitForContent(in: app, seconds: 60), "Auf Home sind keine Kataloge erschienen.")
         sleep(5)
@@ -338,9 +344,20 @@ final class FramesUITests: XCTestCase {
     }
 
     private func openSection(_ name: String, in app: XCUIApplication) -> Bool {
-        let button = app.buttons[name].firstMatch
-        guard button.waitForExistence(timeout: 5), button.isHittable else { return false }
-        button.tap()
+        let path: [String]
+        switch name {
+        case "Filme": path = ["Home", "FILME"]
+        case "Serien": path = ["Home", "SERIEN"]
+        case "Addons": path = ["Mehr", "ADDONS"]
+        case "Einstellungen": path = ["Mehr", "EINSTELLUNGEN"]
+        default: path = [name]
+        }
+        for step in path {
+            let button = app.buttons[step].firstMatch
+            guard button.waitForExistence(timeout: 5), button.isHittable else { return false }
+            button.tap()
+            sleep(1)
+        }
         return true
     }
     #endif

@@ -5,6 +5,8 @@ import FramesCore
 /// Einstieg der App: Anmeldung oder Hauptansicht, je nach Zustand.
 public struct RootView: View {
     @State private var model: AppModel
+    /// Die Start-Animation liegt über allem, bis sie durchgelaufen ist.
+    @State private var showsLaunch = TestHooks.video == nil
 
     @MainActor
     public init() {
@@ -21,7 +23,7 @@ public struct RootView: View {
             Signal.Palette.background.ignoresSafeArea()
             switch model.phase {
             case .launching:
-                FramesWordmark(size: 64)
+                Color.clear
             case .loggedOut:
                 LoginView()
                     .transition(.opacity)
@@ -38,12 +40,21 @@ public struct RootView: View {
                         .transition(.opacity.combined(with: .move(edge: .trailing)))
                 }
             }
+            if showsLaunch {
+                LaunchAnimation()
+                    .transition(.opacity)
+                    .zIndex(1)
+            }
         }
         .animation(Signal.Motion.sheet, value: model.phase)
         .environment(model)
         .preferredColorScheme(.dark)
         .tint(Signal.Palette.lime)
         .task { await model.start() }
+        .task {
+            try? await Task.sleep(for: .milliseconds(LaunchAnimation.duration))
+            withAnimation(.easeOut(duration: 0.4)) { showsLaunch = false }
+        }
         .onChange(of: model.settings) { _, _ in model.saveSettings() }
     }
 }
@@ -81,6 +92,59 @@ enum AppSection: String, CaseIterable, Identifiable {
     var isSystem: Bool { self == .addons || self == .settings }
 }
 
+/// Die vier Punkte der unteren Leiste auf dem iPhone. Filme und Serien liegen unter Home, Addons und Einstellungen unter Mehr.
+enum CompactTab: String, CaseIterable, Identifiable {
+    case home, search, library, more
+
+    init(_ section: AppSection) {
+        switch section {
+        case .home, .movies, .series: self = .home
+        case .search: self = .search
+        case .library: self = .library
+        case .addons, .settings: self = .more
+        }
+    }
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .home: return "Home"
+        case .search: return "Suche"
+        case .library: return "Bibliothek"
+        case .more: return "Mehr"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .home: return "house"
+        case .search: return "magnifyingglass"
+        case .library: return "square.stack"
+        case .more: return "ellipsis"
+        }
+    }
+
+    /// Der Bereich, den ein Tipp auf den Punkt öffnet.
+    var root: AppSection {
+        switch self {
+        case .home: return .home
+        case .search: return .search
+        case .library: return .library
+        case .more: return .settings
+        }
+    }
+
+    /// Die Auswahl oben auf der Seite, wenn der Punkt mehrere Bereiche bündelt.
+    var segments: [(AppSection, String)] {
+        switch self {
+        case .home: return [(.home, "ALLE"), (.movies, "FILME"), (.series, "SERIEN")]
+        case .more: return [(.settings, "EINSTELLUNGEN"), (.addons, "ADDONS")]
+        case .search, .library: return []
+        }
+    }
+}
+
 /// Seitenleiste links auf Fernseher, iPad und Mac. Auf schmalen Geräten eine Leiste unten.
 struct MainView: View {
     @State private var section: AppSection = .home
@@ -95,12 +159,12 @@ struct MainView: View {
                             .frame(width: Signal.pt(280) + 40)
                             .transition(.move(edge: .leading))
                     }
-                    content
+                    content(compact: false)
                 }
                 .animation(Signal.Motion.sheet, value: model.isPlayerActive)
             } else {
                 VStack(spacing: 0) {
-                    content
+                    content(compact: true)
                     if !model.isPlayerActive {
                         BottomBar(section: $section)
                     }
@@ -109,9 +173,16 @@ struct MainView: View {
         }
     }
 
-    private var content: some View {
-        NavigationStack {
-            Group {
+    private func content(compact: Bool) -> some View {
+        let segments = compact ? CompactTab(section).segments : []
+        return NavigationStack {
+            VStack(spacing: 0) {
+                if !segments.isEmpty {
+                    SignalSegments(segments, selection: $section)
+                        .padding(.horizontal, PageInsets.horizontal)
+                        .padding(.top, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 switch section {
                 case .home: HomeView(type: nil)
                 case .movies: HomeView(type: "movie")
@@ -122,6 +193,7 @@ struct MainView: View {
                 case .settings: SettingsView()
                 }
             }
+            .background(Signal.Palette.background)
             .framesDestinations()
         }
         // Jeder Bereich bekommt seinen eigenen Verlauf.
@@ -222,28 +294,36 @@ private struct BottomBar: View {
     @Binding var section: AppSection
 
     var body: some View {
+        let current = CompactTab(section)
         HStack(spacing: 0) {
-            ForEach(AppSection.allCases) { item in
+            ForEach(CompactTab.allCases) { tab in
                 Button {
-                    section = item
+                    if tab != current { section = tab.root }
                 } label: {
-                    VStack(spacing: 4) {
-                        Image(systemName: item.symbol)
-                            .font(.system(size: 18, weight: .medium))
+                    VStack(spacing: 5) {
+                        Image(systemName: tab.symbol)
+                            .font(.system(size: 20, weight: .medium))
+                            .frame(height: 24)
+                        Text(tab.title)
+                            .font(.signal(18, tab == current ? .semibold : .medium))
+                            .lineLimit(1)
+                    }
+                    .foregroundStyle(tab == current ? Signal.Palette.lime : Signal.Palette.textMuted)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .overlay(alignment: .top) {
                         Rectangle()
                             .fill(Signal.Palette.lime)
-                            .frame(width: 18, height: 3)
-                            .opacity(item == section ? 1 : 0)
+                            .frame(width: 28, height: 3)
+                            .opacity(tab == current ? 1 : 0)
+                            .offset(y: -7)
                     }
-                    .foregroundStyle(item == section ? Signal.Palette.lime : Signal.Palette.textMuted)
-                    .frame(maxWidth: .infinity, minHeight: 48)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(item.title)
+                .accessibilityLabel(tab.title)
             }
         }
-        .padding(.top, 6)
+        .padding(.top, 7)
         .background(Signal.Palette.sidebar.ignoresSafeArea(edges: .bottom))
         .overlay(alignment: .top) { Rectangle().fill(Signal.Palette.line).frame(height: 1) }
     }
