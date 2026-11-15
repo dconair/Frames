@@ -1,0 +1,60 @@
+name: Release
+
+# Baut die Mac-App und legt sie als Release auf GitHub ab.
+# iPhone, iPad und Apple TV brauchen eine Signatur von Apple und kommen deshalb über Xcode oder TestFlight.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Versionsnummer, zum Beispiel 0.1.0
+        required: true
+        default: 0.1.0
+
+permissions:
+  contents: write
+
+jobs:
+  mac:
+    name: Mac-App bauen und veröffentlichen
+    runs-on: xcode-27
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: xcodegen generate
+      - name: App bauen
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Frames.xcodeproj \
+            -scheme Frames \
+            -configuration Release \
+            -destination "generic/platform=macOS" \
+            -derivedDataPath build \
+            -skipPackagePluginValidation \
+            MARKETING_VERSION="${{ inputs.version }}" \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM= 2>&1 | grep -E "error:|warning: unable|BUILD (SUCCEEDED|FAILED)" || true
+          test -d build/Build/Products/Release/Frames.app
+      - name: DMG packen
+        run: |
+          mkdir dmg
+          cp -R build/Build/Products/Release/Frames.app dmg/
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname Frames -srcfolder dmg -ov -format UDZO "Frames-${{ inputs.version }}.dmg"
+      - name: Release anlegen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notizen.md <<'TEXT'
+          Frames für den Mac.
+
+          Die App ist nicht von Apple beglaubigt. Beim ersten Start meldet macOS deshalb, dass sie nicht geöffnet werden kann. Dann unter Systemeinstellungen, Datenschutz & Sicherheit auf „Dennoch öffnen“ klicken. Das ist nur einmal nötig.
+
+          iPhone, iPad und Apple TV: das Projekt mit `xcodegen generate` erzeugen und aus Xcode auf das Gerät spielen, siehe README.
+          TEXT
+          gh release create "v${{ inputs.version }}" "Frames-${{ inputs.version }}.dmg" \
+            --target "${{ github.sha }}" \
+            --title "Frames ${{ inputs.version }}" \
+            --notes-file notizen.md

@@ -214,6 +214,17 @@ if let best = ranked.first, let url = best.stream.playableURL {
         if data.count >= 4, data.prefix(4) == Data([0x1A, 0x45, 0xDF, 0xA3]) {
             note("Die Datei ist Matroska (MKV).")
         }
+        // Debrid-Addons liefern bei abgelaufener Anmeldung oder gesperrter Adresse statt des Films
+        // ein kurzes Hinweisvideo. Das erkennt man nur an der Größe.
+        let total = reply?.value(forHTTPHeaderField: "Content-Range")
+            .flatMap { $0.split(separator: "/").last }
+            .flatMap { Int64($0) }
+        if let total, let expected = best.info.sizeBytes, expected > 200_000_000, total < expected / 20 {
+            fail("Die Datei hat nur \(total / 1_048_576) MB statt der angekündigten \(best.info.sizeLabel ?? "?"). "
+                + "Das ist ein Hinweisvideo des Addons, nicht der Film. Meist ist die Debrid-Anmeldung im Addon abgelaufen.")
+        } else if let total {
+            ok("Größe der Datei: \(total / 1_048_576) MB")
+        }
     } catch {
         fail("Abruf: \(error.localizedDescription)")
     }

@@ -129,6 +129,7 @@ struct MainView: View {
 
 private struct Sidebar: View {
     @Binding var section: AppSection
+    @FocusState private var focused: AppSection?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -157,6 +158,10 @@ private struct Sidebar: View {
         #if os(tvOS) || os(macOS)
         .focusSection()
         #endif
+        #if os(tvOS)
+        // Wer in die Seitenleiste wechselt, landet auf dem Bereich, in dem er gerade ist, nicht auf „Home“.
+        .defaultFocus($focused, section)
+        #endif
     }
 
     private func row(_ item: AppSection) -> some View {
@@ -166,6 +171,7 @@ private struct Sidebar: View {
             Text(item.title)
         }
         .buttonStyle(SidebarItemStyle(isSelected: item == section))
+        .focused($focused, equals: item)
     }
 }
 
