@@ -18,10 +18,16 @@ import FoundationNetworking
 // eines Laufs auf GitHub nichts über dich verrät. FRAMES_VERBOSE=1 zeigt sie, etwa am eigenen Rechner.
 
 var failures = 0
+/// Auffälligkeiten am Konto, die kein Fehler von Frames sind, etwa eine abgelaufene Debrid-Anmeldung.
+var warnings = 0
 
 func step(_ title: String) { print("\n== \(title)") }
 func ok(_ text: String) { print("  ok    \(text)") }
 func note(_ text: String) { print("        \(text)") }
+func warn(_ text: String) {
+    warnings += 1
+    print("  ACHTUNG \(text)")
+}
 func fail(_ text: String) {
     failures += 1
     print("  FEHLER \(text)")
@@ -220,7 +226,7 @@ if let best = ranked.first, let url = best.stream.playableURL {
             .flatMap { $0.split(separator: "/").last }
             .flatMap { Int64($0) }
         if let total, let expected = best.info.sizeBytes, expected > 200_000_000, total < expected / 20 {
-            fail("Die Datei hat nur \(total / 1_048_576) MB statt der angekündigten \(best.info.sizeLabel ?? "?"). "
+            warn("Die Datei hat nur \(total / 1_048_576) MB statt der angekündigten \(best.info.sizeLabel ?? "?"). "
                 + "Das ist ein Hinweisvideo des Addons, nicht der Film. Meist ist die Debrid-Anmeldung im Addon abgelaufen.")
         } else if let total {
             ok("Größe der Datei: \(total / 1_048_576) MB")
@@ -233,5 +239,9 @@ if let best = ranked.first, let url = best.stream.playableURL {
     fail("Kein direkter Link für \(streamId). Liefert dein Debrid-Addon für diesen Titel Streams?")
 }
 
-print(failures == 0 ? "\nAlles in Ordnung." : "\n\(failures) Fehler.")
+if failures == 0, warnings > 0 {
+    print("\nFrames arbeitet richtig, aber am Konto ist etwas zu tun: \(warnings) Hinweis(e) oben.")
+} else {
+    print(failures == 0 ? "\nAlles in Ordnung." : "\n\(failures) Fehler.")
+}
 exit(failures == 0 ? 0 : 1)
