@@ -88,6 +88,18 @@ private struct PlayerStage: View {
                 trackPanel(panel)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
+
+            if TestHooks.video != nil {
+                // Daran lesen die Simulator-Tests ab, ob Bild und Zeit wirklich laufen.
+                Color.clear
+                    .frame(width: 1, height: 1)
+                    .accessibilityElement()
+                    .accessibilityIdentifier("player-status")
+                    .accessibilityLabel(
+                        "bild=\(session.hasPicture) spielt=\(session.isPlaying) zeit=\(Int(session.time)) "
+                            + "dauer=\(Int(session.duration)) fehler=\(session.failure ?? "-")"
+                    )
+            }
         }
         .animation(Signal.Motion.sheet, value: controlsVisible)
         .animation(Signal.Motion.sheet, value: panel)

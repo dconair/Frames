@@ -48,6 +48,14 @@ Tests des Kerns:
 swift test
 ```
 
+## Prüfen
+
+- `swift test` prüft den Kern mit festen Beispieldaten.
+- `swift run frames-check` läuft gegen die echten Server: Anmeldung, Addons, Bibliothek, Kataloge, Suche, Details, Quellen und der Abruf des besten direkten Links. Mit `FRAMES_EMAIL` und `FRAMES_PASSWORD` in der Umgebung nimmt es das eigene Konto, sonst die Grundausstattung von Stremio. In der CI heißt der Lauf „Konto-Check“.
+- „Simulator-Tests“ startet die App im iPhone- und im Apple-TV-Simulator, bedient sie, spielt ein Testvideo im Player und legt Bildschirmfotos als Paket am Lauf ab.
+
+Die Zugangsdaten liegen als Secrets `FRAMES_EMAIL` und `FRAMES_PASSWORD` im Repo. In Protokollen stehen weder Links noch Titel aus dem Konto.
+
 ## Hinweise
 
 - Das Passwort geht nur an Stremio. Gespeichert wird allein der Sitzungsschlüssel.

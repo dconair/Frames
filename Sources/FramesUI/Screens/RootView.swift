@@ -26,8 +26,17 @@ public struct RootView: View {
                 LoginView()
                     .transition(.opacity)
             case .ready:
-                MainView()
-                    .transition(.opacity.combined(with: .move(edge: .trailing)))
+                if let video = TestHooks.video {
+                    NavigationStack {
+                        PlayerView(route: PlayerRoute(url: video, headers: [:], item: PlaybackItem(
+                            metaId: "frames-test", type: "movie", name: "Testvideo", poster: nil,
+                            videoId: "frames-test", subtitle: nil
+                        )))
+                    }
+                } else {
+                    MainView()
+                        .transition(.opacity.combined(with: .move(edge: .trailing)))
+                }
             }
         }
         .animation(Signal.Motion.sheet, value: model.phase)
