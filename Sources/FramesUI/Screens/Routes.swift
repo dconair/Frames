@@ -2,6 +2,9 @@
 import SwiftUI
 import FramesCore
 
+// SwiftUI kennt selbst einen Typ dieses Namens. In der App ist immer der Bibliothekseintrag gemeint.
+public typealias LibraryItem = FramesCore.LibraryItem
+
 struct MetaRoute: Hashable {
     var type: String
     var id: String
@@ -22,18 +25,27 @@ struct MetaRoute: Hashable {
     }
 }
 
-struct StreamsRoute: Hashable {
+/// Was abgespielt wird: der Titel und bei Serien die Folge. Reist von der Detailseite bis in den Player,
+/// damit der Wiedergabestand dem richtigen Eintrag im Konto zugeordnet wird.
+struct PlaybackItem: Hashable {
+    var metaId: String
     var type: String
-    var streamId: String
-    var title: String
+    var name: String
+    var poster: String?
+    /// Bei Serien die id der Folge, bei Filmen die des Titels.
+    var videoId: String
+    /// Zweite Zeile, etwa „S03 E01 · Titel der Folge“ oder das Jahr.
     var subtitle: String?
+}
+
+struct StreamsRoute: Hashable {
+    var item: PlaybackItem
 }
 
 struct PlayerRoute: Hashable {
     var url: URL
     var headers: [String: String]
-    var title: String
-    var subtitle: String?
+    var item: PlaybackItem
 }
 
 extension View {

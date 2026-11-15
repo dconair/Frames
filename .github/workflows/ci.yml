@@ -2,6 +2,8 @@ name: CI
 
 on:
   push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
 
 concurrency:
@@ -19,19 +21,25 @@ jobs:
 
   apps:
     name: App bauen (${{ matrix.name }})
-    runs-on: macos-15
+    # Die Player-Engine verlangt Xcode 27.
+    runs-on: xcode-27
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
         include:
           - name: iOS
             destination: generic/platform=iOS Simulator
+          # Für den Fernseher wird das Gerät gebaut, nicht der Simulator: die Dolby-Vision-Bibliothek
+          # der Player-Engine bringt für den tvOS-Simulator nur arm64 mit, der allgemeine
+          # Simulator-Build verlangt aber auch x86_64.
           - name: tvOS
-            destination: generic/platform=tvOS Simulator
+            destination: generic/platform=tvOS
           - name: macOS
             destination: platform=macOS
     steps:
       - uses: actions/checkout@v4
+      - run: xcodebuild -version
       - run: brew install xcodegen
       - run: xcodegen generate
       - run: >

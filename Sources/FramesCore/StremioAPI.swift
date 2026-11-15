@@ -40,9 +40,10 @@ public struct StremioAPI: Sendable {
     }
 
     /// Die im Konto installierten Addons in der Reihenfolge des Nutzers.
-    public func addonCollection(authKey: String) async throws -> [InstalledAddon] {
+    /// Ohne `authKey` liefert Stremio die Grundausstattung, die jedes neue Konto bekommt.
+    public func addonCollection(authKey: String?) async throws -> [InstalledAddon] {
         let result: AddonCollectionResult = try await call("addonCollectionGet", body: [
-            "type": "AddonCollectionGet", "authKey": authKey, "update": true,
+            "type": "AddonCollectionGet", "authKey": authKey ?? NSNull(), "update": true,
         ])
         return result.addons
     }
@@ -55,7 +56,23 @@ public struct StremioAPI: Sendable {
         return result.compactMap(\.value)
     }
 
-    private func call<T: Decodable>(_ method: String, body: [String: Any]) async throws -> T {
+    /// Schreibt den Wiedergabestand ins Konto und gibt den Eintrag zurück, wie er jetzt gespeichert ist.
+    /// Der vorhandene Eintrag wird dafür frisch geholt, damit nichts überschrieben wird, was sich
+    /// inzwischen auf einem anderen Gerät geändert hat.
+    @discardableResult
+    public func saveProgress(_ progress: WatchProgress, authKey: String, now: Date = Date()) async throws -> LibraryItem? {
+        let existing = try await rawResult("datastoreGet", body: [
+            "authKey": authKey, "collection": "libraryItem", "ids": [progress.metaId], "all": false,
+        ]) as? [[String: Any]]
+        let item = LibraryProgress.apply(progress, to: existing?.first, now: now)
+        _ = try await rawResult("datastorePut", body: [
+            "authKey": authKey, "collection": "libraryItem", "changes": [item],
+        ])
+        let data = try JSONSerialization.data(withJSONObject: item)
+        return try? JSONDecoder().decode(LibraryItem.self, from: data)
+    }
+
+    private func post(_ method: String, body: [String: Any]) async throws -> Data {
         var request = URLRequest(url: baseURL.appendingPathComponent(method))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -63,7 +80,28 @@ public struct StremioAPI: Sendable {
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let response = try await http.send(request)
         guard (200..<300).contains(response.status) else { throw FramesError.http(response.status) }
-        let envelope = try decodeJSON(Envelope<T>.self, from: response.data)
+        return response.data
+    }
+
+    /// Wie `call`, aber ohne festen Typ. Für Einträge, die unverändert zurückgeschrieben werden.
+    private func rawResult(_ method: String, body: [String: Any]) async throws -> Any {
+        let data = try await post(method, body: body)
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw FramesError.decoding("Antwort ist kein Objekt")
+        }
+        if let error = object["error"] as? [String: Any] {
+            throw FramesError.api(
+                code: (error["code"] as? NSNumber)?.intValue,
+                message: error["message"] as? String ?? "Unbekannter Fehler"
+            )
+        }
+        guard let result = object["result"] else { throw FramesError.decoding("Antwort ohne result") }
+        return result
+    }
+
+    private func call<T: Decodable>(_ method: String, body: [String: Any]) async throws -> T {
+        let data = try await post(method, body: body)
+        let envelope = try decodeJSON(Envelope<T>.self, from: data)
         if let error = envelope.error {
             throw FramesError.api(code: error.code, message: error.message)
         }

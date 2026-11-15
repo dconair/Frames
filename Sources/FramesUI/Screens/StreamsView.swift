@@ -8,13 +8,15 @@ struct StreamsView: View {
     @Environment(AppModel.self) private var model
     @State private var streams: [SourcedStream]?
     @State private var hiddenCount = 0
+    @Environment(\.dismiss) private var dismiss
+    @FocusState private var firstRowFocused: Bool
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Signal.pt(28)) {
                 VStack(alignment: .leading, spacing: Signal.pt(10)) {
-                    SignalEyebrow(route.subtitle ?? "Quellen")
-                    Text(route.title)
+                    SignalEyebrow(route.item.subtitle ?? "Quellen")
+                    Text(route.item.name)
                         .font(.signal(64, .bold))
                         .tracking(-0.04 * Signal.text(64))
                         .foregroundStyle(Signal.Palette.text)
@@ -30,17 +32,23 @@ struct StreamsView: View {
                                 ? "Deine Addons liefern hierfür nur Torrents. Frames spielt direkte Links ab, wie sie ein Debrid-Addon liefert."
                                 : "Keines deiner Addons hat hierfür einen Stream."
                         )
+                        #if os(tvOS)
+                        // Ohne ein fokussierbares Element käme man auf dem Fernseher von dieser Seite nicht zurück.
+                        Button("ZURÜCK") { dismiss() }
+                            .buttonStyle(SignalButtonStyle(.primary))
+                            .frame(maxWidth: .infinity)
+                        #endif
                     } else {
                         LazyVStack(spacing: Signal.pt(10)) {
                             ForEach(Array(streams.enumerated()), id: \.element.id) { position, item in
                                 if let url = item.stream.playableURL {
                                     NavigationLink(value: PlayerRoute(
-                                        url: url, headers: item.stream.requestHeaders,
-                                        title: route.title, subtitle: route.subtitle
+                                        url: url, headers: item.stream.requestHeaders, item: route.item
                                     )) {
                                         StreamRow(item: item, isRecommended: position == 0)
                                     }
                                     .buttonStyle(SignalCardButtonStyle(radius: 8, grows: false))
+                                    .focused($firstRowFocused, when: position == 0)
                                 }
                             }
                         }
@@ -62,12 +70,18 @@ struct StreamsView: View {
         .signalPage()
         .task(id: route) {
             guard streams == nil else { return }
-            let all = await model.content.streams(type: route.type, id: route.streamId, addons: model.addons)
+            let all = await model.content.streams(type: route.item.type, id: route.item.videoId, addons: model.addons)
             let ranked = StreamRanker.ranked(all, preferences: model.settings)
             withAnimation(Signal.Motion.sheet) {
                 hiddenCount = all.count - ranked.count
                 streams = ranked
             }
+            #if os(tvOS) || os(macOS)
+            // Während der Abfrage gibt es hier nichts zu fokussieren, der Fokus weicht in die Seitenleiste aus.
+            // Sobald die Quellen da sind, gehört er auf die empfohlene.
+            try? await Task.sleep(for: .milliseconds(150))
+            firstRowFocused = true
+            #endif
         }
     }
 }
@@ -83,7 +97,26 @@ private struct StreamRow: View {
 
     var body: some View {
         let info = item.info
-        HStack(spacing: Signal.pt(20)) {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: Signal.pt(20)) {
+                title
+                Spacer(minLength: Signal.pt(12))
+                badges(info)
+            }
+            // Auf dem iPhone ist die Zeile zu schmal, dort rücken die Angaben unter den Namen.
+            VStack(alignment: .leading, spacing: 8) {
+                title
+                badges(info)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 10)
+        }
+        .padding(.horizontal, Signal.pt(24))
+        .frame(maxWidth: .infinity, minHeight: max(56, Signal.pt(92)), alignment: .leading)
+        .signalPanel(active: isRecommended)
+    }
+
+    private var title: some View {
             VStack(alignment: .leading, spacing: Signal.pt(6)) {
                 HStack(spacing: Signal.pt(12)) {
                     Text(item.addonName)
@@ -97,6 +130,7 @@ private struct StreamRow: View {
                             .padding(.horizontal, Signal.pt(8))
                             .padding(.vertical, Signal.pt(3))
                             .background(Signal.Palette.limeFill, in: RoundedRectangle(cornerRadius: 3))
+                            .fixedSize()
                     }
                 }
                 Text(detail)
@@ -105,7 +139,9 @@ private struct StreamRow: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
-            Spacer(minLength: Signal.pt(12))
+    }
+
+    private func badges(_ info: StreamInfo) -> some View {
             HStack(spacing: Signal.pt(8)) {
                 if let resolution = info.resolution {
                     SignalBadge(resolution.label, kind: .resolution)
@@ -123,10 +159,19 @@ private struct StreamRow: View {
                     SignalBadge("LÄDT ERST")
                 }
             }
+            .fixedSize()
+    }
+}
+
+private extension View {
+    /// Bindet den Fokus nur an die Zeile, für die die Bedingung gilt.
+    @ViewBuilder
+    func focused(_ binding: FocusState<Bool>.Binding, when condition: Bool) -> some View {
+        if condition {
+            focused(binding)
+        } else {
+            self
         }
-        .padding(.horizontal, Signal.pt(24))
-        .frame(maxWidth: .infinity, minHeight: max(56, Signal.pt(92)), alignment: .leading)
-        .signalPanel(active: isRecommended)
     }
 }
 #endif

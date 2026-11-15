@@ -22,6 +22,8 @@ public final class AppModel {
     public let content: ContentService
     private let api: StremioAPI
     private let store: SessionStore
+    /// Nur in den automatischen Tests: ohne Konto, mit Stremios Grundausstattung an Addons.
+    private var isGuest = false
 
     public init(
         api: StremioAPI = StremioAPI(),
@@ -37,6 +39,17 @@ public final class AppModel {
     /// Beim Start: gespeicherte Sitzung wieder aufnehmen und Addons laden.
     public func start() async {
         guard phase == .launching else { return }
+        if TestHooks.isGuest {
+            isGuest = true
+            phase = .ready
+            await refresh()
+            return
+        }
+        if let login = TestHooks.login {
+            phase = .loggedOut
+            await self.login(email: login.email, password: login.password)
+            return
+        }
         guard let saved = store.loadSession() else {
             phase = .loggedOut
             return
@@ -83,14 +96,16 @@ public final class AppModel {
 
     /// Lädt Addons und Bibliothek neu aus dem Stremio-Konto.
     public func refresh() async {
-        guard let key = session?.authKey else { return }
+        let key = session?.authKey
+        guard key != nil || isGuest else { return }
         isBusy = true
         defer { isBusy = false }
+        let api = api
         do {
             async let loadedAddons = api.addonCollection(authKey: key)
-            async let loadedLibrary = api.libraryItems(authKey: key)
+            async let loadedLibrary = Self.loadLibrary(api, authKey: key)
             addons = try await loadedAddons
-            library = (try? await loadedLibrary) ?? library
+            library = await loadedLibrary ?? library
             lastSync = Date()
             errorMessage = nil
         } catch FramesError.api(let code, let message) where code == 1 {
@@ -102,8 +117,30 @@ public final class AppModel {
         }
     }
 
+    /// Position in Sekunden, an der dieses Video zuletzt verlassen wurde.
+    public func resumePosition(metaId: String, videoId: String) -> Double? {
+        library.resumePosition(metaId: metaId, videoId: videoId)
+    }
+
+    /// Meldet den Wiedergabestand ans Stremio-Konto, damit „Weiter ansehen“ auf allen Geräten stimmt.
+    /// Schlägt das fehl, läuft die Wiedergabe ungestört weiter. Der nächste Versuch kommt von selbst.
+    public func saveProgress(_ progress: WatchProgress) async {
+        guard progress.isWorthSaving, let key = session?.authKey else { return }
+        guard let saved = try? await api.saveProgress(progress, authKey: key) else { return }
+        if let index = library.firstIndex(where: { $0.id == saved.id }) {
+            library[index] = saved
+        } else {
+            library.append(saved)
+        }
+    }
+
     public func saveSettings() {
         store.saveSettings(settings)
+    }
+
+    private nonisolated static func loadLibrary(_ api: StremioAPI, authKey: String?) async -> [LibraryItem]? {
+        guard let authKey else { return nil }
+        return try? await api.libraryItems(authKey: authKey)
     }
 
     private static func describe(_ error: Error) -> String {

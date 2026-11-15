@@ -4,9 +4,9 @@ options:
   bundleIdPrefix: app.frames
   createIntermediateGroups: true
   deploymentTarget:
-    iOS: "17.0"
-    tvOS: "17.0"
-    macOS: "14.0"
+    iOS: "18.0"
+    tvOS: "18.0"
+    macOS: "15.0"
 packages:
   Frames:
     path: .
@@ -34,10 +34,29 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_UIUserInterfaceStyle: Dark
+  # Startet die App im Simulator und bedient sie. Läuft in der CI für iPhone und Apple TV.
+  FramesUITests:
+    type: bundle.ui-testing
+    platform: auto
+    supportedDestinations: [iOS, tvOS]
+    sources:
+      - UITests
+    dependencies:
+      - target: Frames
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.frames.FramesUITests
+        TEST_TARGET_NAME: Frames
+        SWIFT_VERSION: "5.0"
+        GENERATE_INFOPLIST_FILE: YES
 schemes:
   Frames:
     build:
       targets:
         Frames: all
+    test:
+      config: Debug
+      targets:
+        - FramesUITests
     run:
       config: Debug

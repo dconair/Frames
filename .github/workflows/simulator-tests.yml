@@ -1,0 +1,122 @@
+name: Simulator-Tests
+
+# Startet die App im iPhone- und im Apple-TV-Simulator, bedient sie und legt Bildschirmfotos ab.
+# Mit den Secrets FRAMES_EMAIL und FRAMES_PASSWORD wird zusätzlich die Anmeldung mit dem Konto geprüft.
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: simulator-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ui:
+    name: App bedienen (${{ matrix.name }})
+    runs-on: xcode-27
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: iPhone
+            runtime: ".iOS-"
+            device: iPhone
+            platform: iOS
+          - name: Apple TV
+            runtime: ".tvOS-"
+            device: Apple TV
+            platform: tvOS
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: xcodegen generate
+      - name: Simulator wählen
+        run: |
+          pick() {
+            xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          runtime, device = sys.argv[1], sys.argv[2]
+          devices = json.load(sys.stdin)["devices"]
+          found = [d for key in sorted(devices, reverse=True) if runtime in key
+                   for d in devices[key] if device in d["name"]]
+          # Ein gewöhnliches Gerät vorziehen, kein Sondermodell.
+          found.sort(key=lambda d: 0 if d["name"].endswith(" Pro") or "4K" in d["name"] else 1)
+          print(found[0]["udid"] if found else "")' "${{ matrix.runtime }}" "${{ matrix.device }}"
+          }
+          UDID=$(pick)
+          if [ -z "$UDID" ]; then
+            xcodebuild -downloadPlatform "${{ matrix.platform }}"
+            UDID=$(pick)
+          fi
+          test -n "$UDID"
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID" || true
+      - name: Tests im Simulator
+        env:
+          TEST_RUNNER_FRAMES_EMAIL: ${{ secrets.FRAMES_EMAIL }}
+          TEST_RUNNER_FRAMES_PASSWORD: ${{ secrets.FRAMES_PASSWORD }}
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Frames.xcodeproj \
+            -scheme Frames \
+            -destination "id=$UDID" \
+            -resultBundlePath ergebnis.xcresult \
+            -skipPackagePluginValidation 2>&1 \
+            | tee xcodebuild.log \
+            | grep -E "FRAMES-UI|error:|Test Case|Test Suite|TEST (SUCCEEDED|FAILED)|Executed|BUILD FAILED|Testing failed" || true
+          grep -q "TEST SUCCEEDED" xcodebuild.log
+      - name: Vorschau mit dem Konto aufnehmen
+        env:
+          TEST_RUNNER_FRAMES_EMAIL: ${{ secrets.FRAMES_EMAIL }}
+          TEST_RUNNER_FRAMES_PASSWORD: ${{ secrets.FRAMES_PASSWORD }}
+          TEST_RUNNER_FRAMES_VORSCHAU: "1"
+        run: |
+          [ -n "$TEST_RUNNER_FRAMES_EMAIL" ] || exit 0
+          mkdir -p vorschau
+          xcrun simctl io "$UDID" recordVideo --codec h264 --force "vorschau/vorschau-${{ matrix.platform }}.mp4" &
+          AUFNAHME=$!
+          sleep 3
+          xcodebuild test \
+            -project Frames.xcodeproj \
+            -scheme Frames \
+            -destination "id=$UDID" \
+            -only-testing:FramesUITests/FramesUITests/testVorschauMitKonto \
+            -skipPackagePluginValidation 2>&1 \
+            | grep -E "FRAMES-UI|error:|Test Case|TEST (SUCCEEDED|FAILED)" || true
+          kill -INT $AUFNAHME
+          wait $AUFNAHME || true
+          ls -la vorschau
+      # Die Aufnahme zeigt das eigene Konto, deshalb bleibt sie nur einen Tag liegen.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vorschau-${{ matrix.platform }}
+          path: vorschau
+          retention-days: 1
+          if-no-files-found: ignore
+      - name: Bildschirmfotos herausziehen
+        if: always()
+        run: |
+          xcrun xcresulttool export attachments --path ergebnis.xcresult --output-path bilder || exit 0
+          python3 - <<'PY'
+          import json, os
+          try:
+              manifest = json.load(open("bilder/manifest.json"))
+          except Exception:
+              raise SystemExit(0)
+          for test in manifest:
+              for item in test.get("attachments", []):
+                  source = os.path.join("bilder", item.get("exportedFileName", ""))
+                  name = item.get("suggestedHumanReadableName") or ""
+                  if os.path.isfile(source) and name:
+                      os.replace(source, os.path.join("bilder", name.replace("/", "-")))
+          PY
+          ls -la bilder
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bilder-${{ matrix.platform }}
+          path: bilder
+          if-no-files-found: ignore
