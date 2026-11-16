@@ -330,6 +330,94 @@ public struct SignalSegments<Value: Hashable>: View {
     }
 }
 
+/// Kleine An-Aus-Taste für Sortierung und Filter. Gewählt ist sie in Limette gefüllt.
+public struct SignalChipStyle: ButtonStyle {
+    private let isSelected: Bool
+
+    public init(isSelected: Bool) {
+        self.isSelected = isSelected
+    }
+
+    public func makeBody(configuration: Configuration) -> some View {
+        Chip(isSelected: isSelected, configuration: configuration)
+    }
+
+    private struct Chip: View {
+        let isSelected: Bool
+        let configuration: Configuration
+        @Environment(\.isFocused) private var isFocused
+        @State private var isHovered = false
+
+        var body: some View {
+            let active = isFocused || isHovered
+            let shape = RoundedRectangle(cornerRadius: 6, style: .continuous)
+            configuration.label
+                .font(.signalMono(16, isSelected ? .bold : .medium))
+                .foregroundStyle(isSelected ? Signal.Palette.background : Signal.Palette.text)
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.horizontal, Signal.pt(16))
+                .frame(minHeight: max(34, Signal.pt(48)))
+                .background {
+                    if isSelected {
+                        shape.fill(Signal.Palette.limeFill)
+                    } else {
+                        shape.fill(active ? Signal.Palette.panelActive : Color.clear)
+                    }
+                }
+                .overlay { shape.stroke(isSelected ? Color.clear : Signal.Palette.border, lineWidth: 1) }
+                .signalFocusRing(active, radius: 6, inset: 4)
+                .opacity(configuration.isPressed ? 0.8 : 1)
+                .animation(Signal.Motion.focus, value: active)
+                .trackHover($isHovered)
+        }
+    }
+}
+
+/// Reiht Elemente wie Wörter auf und bricht in die nächste Zeile um, wenn die Breite nicht reicht.
+public struct SignalFlow: Layout {
+    private let spacing: CGFloat
+
+    public init(spacing: CGFloat = 8) {
+        self.spacing = spacing
+    }
+
+    public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = arrange(subviews, width: proposal.width ?? .infinity)
+        return CGSize(width: rows.width, height: rows.height)
+    }
+
+    public func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let rows = arrange(subviews, width: bounds.width)
+        for (index, origin) in rows.origins.enumerated() {
+            subviews[index].place(
+                at: CGPoint(x: bounds.minX + origin.x, y: bounds.minY + origin.y), anchor: .topLeading, proposal: .unspecified
+            )
+        }
+    }
+
+    private func arrange(_ subviews: Subviews, width: CGFloat) -> (origins: [CGPoint], width: CGFloat, height: CGFloat) {
+        var origins = [CGPoint]()
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var widest: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            origins.append(CGPoint(x: x, y: y))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+            widest = max(widest, x - spacing)
+        }
+        return (origins, widest, y + rowHeight)
+    }
+}
+
 // MARK: Zustände
 
 /// Ladeanzeige und Hinweise für leere oder fehlgeschlagene Inhalte.

@@ -58,6 +58,68 @@ final class FramesUITests: XCTestCase {
         }
     }
 
+    // MARK: Sortieren und Filtern
+
+    /// Öffnet die Quellenliste mit einer festen Beispielliste, sortiert nach Bitrate, filtert auf 1080p und Webtor
+    /// und spielt die erste verbliebene Quelle. Die Beispielzeilen führen alle auf ein frei verfügbares Testvideo.
+    func testQuellenSortierenUndFiltern() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-frames-gast", "-frames-beispielquellen"]
+        app.launch()
+        XCTAssertTrue(waitForContent(in: app, seconds: 60), "Auf Home sind keine Kataloge erschienen.")
+        sleep(4)
+        openFirstTitle(in: app)
+        sleep(5)
+        let play = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'ABSPIELEN'")).firstMatch
+        XCTAssertTrue(play.waitForExistence(timeout: 20), "Auf der Detailseite fehlt „Abspielen“.")
+        activate(play, in: app)
+
+        let toggle = app.buttons["quellen-filter"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 20), "Über der Quellenliste fehlt „Sortieren & Filtern“.")
+        let state = app.staticTexts["quellen-stand"]
+        sleep(3)
+        snap("30-Quellen")
+        print("FRAMES-UI Filter vorher: \(state.label)")
+        XCTAssertTrue(state.label.contains("10 QUELLEN"), "Die Beispielliste ist nicht vollständig: \(state.label)")
+
+        openFilters(toggle, in: app)
+        sleep(2)
+        snap("31-Filter-offen")
+        let choices = [
+            ("BITRATE", ["BESTE ZUERST", "BITRATE", "KLEINSTE", "TON", "FASSUNG"]),
+            ("1080p", ["2160p", "1080p", "720p"]),
+            ("WEBTOR", ["RD", "WEBTOR"]),
+        ]
+        for (step, (label, row)) in choices.enumerated() {
+            let found = choose(label, among: row, in: app)
+            XCTAssertTrue(found, "Die Auswahl „\(label)“ ließ sich nicht treffen.")
+            sleep(2)
+            snap("3\(step + 2)-Filter-\(label)")
+            print("FRAMES-UI Filter nach \(label): \(state.label)")
+        }
+        XCTAssertTrue(state.label.contains("BITRATE"), "Die Sortierung steht nicht im Stand: \(state.label)")
+        XCTAssertTrue(state.label.contains("2 FILTER"), "Die Filter stehen nicht im Stand: \(state.label)")
+        XCTAssertTrue(state.label.contains("2 VON 10 QUELLEN"), "1080p von Webtor sind genau zwei Zeilen: \(state.label)")
+
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Webtor.io'")).firstMatch
+        XCTAssertTrue(row.exists, "Nach dem Filtern fehlt die Webtor-Zeile.")
+        print("FRAMES-UI Filter erste Zeile: \(row.label)")
+        XCTAssertTrue(row.label.contains("6,4 GB"), "Mit Sortierung nach Bitrate steht die größere Datei oben: \(row.label)")
+        openRow(row, in: app)
+
+        let status = app.descendants(matching: .any)["player-status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 30), "Der Player ist nicht erschienen.")
+        var hasPicture = false
+        for _ in 0..<60 where !hasPicture {
+            hasPicture = status.label.contains("bild=true")
+            if !hasPicture { sleep(1) }
+        }
+        print("FRAMES-UI Filter Player: \(status.label)")
+        XCTAssertTrue(hasPicture, "Die gefilterte Quelle spielt nicht: \(status.label)")
+        sleep(4)
+        snap("35-Player-aus-gefilterter-Liste")
+    }
+
     // MARK: Echtes Konto
 
     /// Meldet sich mit dem Konto aus den Secrets an. Es werden weder Bilder noch Titel festgehalten.
@@ -270,6 +332,44 @@ final class FramesUITests: XCTestCase {
         sleep(2)
     }
 
+    private func openFilters(_ toggle: XCUIElement, in app: XCUIApplication) {
+        let remote = XCUIRemote.shared
+        for _ in 0..<4 where !toggle.hasFocus {
+            remote.press(.up)
+            sleep(1)
+        }
+        remote.press(.select)
+    }
+
+    /// Geht nach unten bis in die Zeile mit diesen Tasten und dann seitwärts genau bis zur gesuchten.
+    private func choose(_ label: String, among row: [String], in app: XCUIApplication) -> Bool {
+        let remote = XCUIRemote.shared
+        for _ in 0..<8 where !row.contains(focusedLabel(in: app)) {
+            remote.press(.down)
+            sleep(1)
+        }
+        guard let target = row.firstIndex(of: label) else { return false }
+        for _ in 0..<row.count {
+            guard let current = row.firstIndex(of: focusedLabel(in: app)) else { return false }
+            if current == target {
+                remote.press(.select)
+                return true
+            }
+            remote.press(current < target ? .right : .left)
+            sleep(1)
+        }
+        return false
+    }
+
+    private func openRow(_ row: XCUIElement, in app: XCUIApplication) {
+        let remote = XCUIRemote.shared
+        for _ in 0..<12 where !row.hasFocus {
+            remote.press(.down)
+            sleep(1)
+        }
+        remote.press(.select)
+    }
+
     private func select(_ element: XCUIElement, in app: XCUIApplication) {
         XCUIRemote.shared.press(.select)
     }
@@ -320,6 +420,24 @@ final class FramesUITests: XCTestCase {
     private func activate(_ element: XCUIElement, in app: XCUIApplication) {
         if !element.isHittable { app.swipeUp() }
         element.tap()
+    }
+
+    private func openFilters(_ toggle: XCUIElement, in app: XCUIApplication) {
+        toggle.tap()
+    }
+
+    private func choose(_ label: String, among row: [String], in app: XCUIApplication) -> Bool {
+        let chip = app.buttons[label].firstMatch
+        guard chip.waitForExistence(timeout: 5) else { return false }
+        if !chip.isHittable { app.swipeUp() }
+        guard chip.isHittable else { return false }
+        chip.tap()
+        return true
+    }
+
+    private func openRow(_ row: XCUIElement, in app: XCUIApplication) {
+        for _ in 0..<4 where !row.isHittable { app.swipeUp() }
+        row.tap()
     }
 
     private func select(_ element: XCUIElement, in app: XCUIApplication) {

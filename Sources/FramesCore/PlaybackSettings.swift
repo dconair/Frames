@@ -26,6 +26,9 @@ public struct PlaybackSettings: Codable, Sendable, Hashable {
     public var preferDolbyVision: Bool = true
     public var audioLanguage: String = "de"
     public var subtitleLanguage: String?
+    /// Sortierung und Filter der Quellenliste. Sie gelten weiter, bis man sie ändert.
+    public var streamSort: StreamSort = .recommended
+    public var streamFilter = StreamFilter()
 
     public init() {}
 
@@ -42,6 +45,8 @@ public struct PlaybackSettings: Codable, Sendable, Hashable {
         preferDolbyVision = c.bool("preferDolbyVision") ?? defaults.preferDolbyVision
         audioLanguage = c.string("audioLanguage") ?? defaults.audioLanguage
         subtitleLanguage = c.string("subtitleLanguage")
+        streamSort = c.value("streamSort") ?? defaults.streamSort
+        streamFilter = c.value("streamFilter") ?? defaults.streamFilter
     }
 }
 

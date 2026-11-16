@@ -164,3 +164,26 @@ public struct CatalogPage: Decodable, Sendable {
 struct MetaEnvelope: Decodable {
     let meta: Meta
 }
+
+extension Meta {
+    /// Laufzeit in Minuten, gelesen aus Angaben wie „148 min“, „2h 28min“ oder „2:28“.
+    public var runtimeMinutes: Int? { Self.minutes(from: runtime) }
+
+    static func minutes(from text: String?) -> Int? {
+        guard let text = text?.lowercased() else { return nil }
+        func number(_ pattern: String) -> Int? {
+            guard let range = text.range(of: pattern, options: .regularExpression) else { return nil }
+            return Int(text[range].filter(\.isNumber))
+        }
+        let hours = number(#"[0-9]+\s*(h|std)"#)
+        let minutes = number(#"[0-9]+\s*m"#)
+        if hours != nil || minutes != nil {
+            let total = (hours ?? 0) * 60 + (minutes ?? 0)
+            return total > 0 ? total : nil
+        }
+        let parts = text.split(separator: ":").map { Int($0.trimmingCharacters(in: .whitespaces)) }
+        if parts.count == 2, let hours = parts[0], let minutes = parts[1] { return hours * 60 + minutes }
+        if let plain = Int(text.trimmingCharacters(in: .whitespaces)), plain > 0 { return plain }
+        return nil
+    }
+}

@@ -136,7 +136,36 @@ public final class AppModel {
         }
     }
 
+    /// Installiert ein Addon über seine Adresse im Stremio-Konto. Gibt den Namen zurück, wenn es geklappt hat.
+    /// Die Adresse selbst taucht in keiner Meldung auf: sie trägt oft einen persönlichen Schlüssel.
+    public func installAddon(address: String) async -> Result<String, AddonInstallFailure> {
+        guard let url = AddonAddress.normalize(address) else {
+            return .failure(.init("Das ist keine Addon-Adresse. Sie beginnt mit https:// und endet auf /manifest.json."))
+        }
+        guard let key = session?.authKey else {
+            return .failure(.init("Melde dich erst mit deinem Stremio-Konto an."))
+        }
+        isBusy = true
+        let api = api
+        let result: Result<String, AddonInstallFailure>
+        do {
+            let manifest = try await api.installAddon(at: url, authKey: key)
+            result = .success(manifest.name)
+        } catch FramesError.http(let status) where status == 401 || status == 403 || status == 404 {
+            result = .failure(.init("Unter dieser Adresse antwortet kein Addon. Ist sie vollständig und noch gültig?"))
+        } catch FramesError.decoding {
+            result = .failure(.init("Unter dieser Adresse liegt kein Stremio-Addon."))
+        } catch {
+            result = .failure(.init(Self.describe(error)))
+        }
+        isBusy = false
+        if case .success = result { await refresh() }
+        return result
+    }
+
     public func saveSettings() {
+        // Der Test mit der Beispielliste soll keine Filter hinterlassen, die spätere Läufe einengen.
+        guard TestHooks.sampleStreams == nil else { return }
         store.saveSettings(settings)
     }
 
@@ -151,5 +180,10 @@ public final class AppModel {
         }
         return (error as? LocalizedError)?.errorDescription ?? "Das hat nicht geklappt."
     }
+}
+
+public struct AddonInstallFailure: Error, Equatable {
+    public let message: String
+    init(_ message: String) { self.message = message }
 }
 #endif

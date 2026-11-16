@@ -44,6 +44,58 @@ public struct StreamInfo: Sendable, Hashable {
         case h264 = "H.264", hevc = "HEVC", av1 = "AV1"
     }
 
+    /// Der Dienst, der die Datei ausliefert: ein Debrid-Dienst oder Webtor.
+    public enum Service: String, Sendable, Codable, CaseIterable, Comparable {
+        case realDebrid, allDebrid, premiumize, debridLink, torBox, offcloud, easyDebrid, webtor
+
+        public static func < (lhs: Service, rhs: Service) -> Bool {
+            allCases.firstIndex(of: lhs)! < allCases.firstIndex(of: rhs)!
+        }
+
+        /// Kurzform für Badges und Filter.
+        public var label: String {
+            switch self {
+            case .realDebrid: return "RD"
+            case .allDebrid: return "AD"
+            case .premiumize: return "PM"
+            case .debridLink: return "DL"
+            case .torBox: return "TB"
+            case .offcloud: return "OC"
+            case .easyDebrid: return "ED"
+            case .webtor: return "WEBTOR"
+            }
+        }
+
+        public var name: String {
+            switch self {
+            case .realDebrid: return "Real-Debrid"
+            case .allDebrid: return "AllDebrid"
+            case .premiumize: return "Premiumize"
+            case .debridLink: return "Debrid-Link"
+            case .torBox: return "TorBox"
+            case .offcloud: return "Offcloud"
+            case .easyDebrid: return "EasyDebrid"
+            case .webtor: return "Webtor"
+            }
+        }
+    }
+
+    /// Woher die Fassung stammt. Die Reihenfolge ist die der Güte.
+    public enum Release: Int, Sendable, Codable, CaseIterable, Comparable {
+        case cam = 1, tv, web, bluRay, remux
+
+        public static func < (lhs: Release, rhs: Release) -> Bool { lhs.rawValue < rhs.rawValue }
+        public var label: String {
+            switch self {
+            case .cam: return "CAM"
+            case .tv: return "HDTV"
+            case .web: return "WEB"
+            case .bluRay: return "BLURAY"
+            case .remux: return "REMUX"
+            }
+        }
+    }
+
     public var resolution: Resolution?
     public var dynamicRange: DynamicRange?
     public var audio: Audio?
@@ -52,6 +104,10 @@ public struct StreamInfo: Sendable, Hashable {
     public var sizeBytes: Int64?
     /// Bei Debrid-Addons: liegt die Datei schon beim Dienst und startet sofort?
     public var isCached: Bool?
+    public var service: Service?
+    public var release: Release?
+    /// Sprachen der Tonspuren als Kürzel (`de`, `en`), dazu `multi` für Fassungen mit mehreren Sprachen.
+    public var languages: Set<String> = []
 
     public init(
         resolution: Resolution? = nil, dynamicRange: DynamicRange? = nil, audio: Audio? = nil,
@@ -70,6 +126,7 @@ public struct StreamInfo: Sendable, Hashable {
         let text = [stream.name, stream.title, stream.filename].compactMap { $0 }.joined(separator: "\n")
         self.init(text: text)
         if let size = stream.videoSize, size > 0 { sizeBytes = size }
+        service = Self.service(name: stream.name, text: text, url: stream.url)
     }
 
     public init(text: String) {
@@ -108,9 +165,64 @@ public struct StreamInfo: Sendable, Hashable {
             sizeBytes = Int64(number * unit)
         }
 
+        if has(#"\bremux\b"#) { release = .remux }
+        else if has(#"\b(blu[ \-]?ray|bdrip|brrip|bd25|bd50)\b"#) { release = .bluRay }
+        else if has(#"\bweb([ .\-]?(dl|rip))?\b"#) { release = .web }
+        else if has(#"\b(hdtv|pdtv|dvb)\b"#) { release = .tv }
+        else if has(#"\b(cam(rip)?|hdcam|telesync|hdts|telecine)\b"#) { release = .cam }
+
+        if text.contains("🇩🇪") || has(#"\b(german|deutsch|ger)\b"#) { languages.insert("de") }
+        if text.contains("🇬🇧") || text.contains("🇺🇸") || has(#"\b(english|eng)\b"#) { languages.insert("en") }
+        // „German.DL“ heißt in Szene-Namen: deutsche und englische Tonspur.
+        if has(#"\bgerman[ .]dl\b"#) { languages.insert("en") }
+        if has(#"\b(multi|dual[ .\-]?audio)\b"#) || languages.count > 1 { languages.insert("multi") }
+
+        service = Self.service(name: nil, text: text, url: nil)
+
         // Schreibweisen der verbreiteten Debrid-Addons: „[RD+]“ oder Blitz für vorhanden, „[RD download]“ oder Pfeil für nicht.
-        if has(#"\[(rd|ad|pm|dl|tb|oc)\+\]"#) || text.contains("⚡") { isCached = true }
-        else if has(#"\[(rd|ad|pm|dl|tb|oc) download\]"#) || text.contains("⬇") || text.contains("⏳") { isCached = false }
+        // Webtor schreibt „[P2P]“, wenn die Datei erst aus dem Schwarm geholt werden muss.
+        if has(#"\[(rd|ad|pm|dl|tb|oc|ed)\+\]"#) || text.contains("⚡") { isCached = true }
+        else if has(#"\[(rd|ad|pm|dl|tb|oc|ed) download\]"#) || has(#"\[p2p\]"#) || text.contains("⬇") || text.contains("⏳") { isCached = false }
+    }
+
+    private static let serviceTags: [(String, Service)] = [
+        ("rd", .realDebrid), ("ad", .allDebrid), ("pm", .premiumize), ("dl", .debridLink),
+        ("tb", .torBox), ("oc", .offcloud), ("ed", .easyDebrid), ("wt", .webtor),
+    ]
+
+    private static let serviceNames: [(String, Service)] = [
+        (#"real[ \-]?debrid"#, .realDebrid), (#"all[ \-]?debrid"#, .allDebrid), ("premiumize", .premiumize),
+        (#"debrid[ \-]?link"#, .debridLink), ("torbox", .torBox), ("offcloud", .offcloud),
+        (#"easy[ \-]?debrid"#, .easyDebrid), ("webtor", .webtor),
+    ]
+
+    /// Liest den Dienst aus den Schreibweisen der Addons: „[RD+]“, „[⚡WT]“, „RD ⚡“, ausgeschrieben oder aus der Adresse.
+    static func service(name: String?, text: String, url: URL?) -> Service? {
+        func matches(_ pattern: String, in value: String, caseSensitive: Bool = false) -> Bool {
+            value.range(of: pattern, options: caseSensitive ? [.regularExpression] : [.regularExpression, .caseInsensitive]) != nil
+        }
+        // In eckigen Klammern, mit Blitz, Plus oder „download“ davor oder dahinter.
+        for (tag, service) in serviceTags where matches("\\[[⚡⬇⏳ ]*\(tag)(\\+|⚡| download)?[ ⚡⬇⏳]*\\]", in: text) {
+            return service
+        }
+        // Frei stehendes Kürzel in der Kopfzeile, etwa „Addon RD ⚡“. „DL“ bleibt außen vor, das steht auch in „WEB-DL“.
+        if let head = name?.split(whereSeparator: \.isNewline).first.map(String.init) {
+            for (tag, service) in serviceTags where tag != "dl"
+                && matches("(?<![A-Za-z0-9.\\-])\(tag.uppercased())(?![A-Za-z0-9])", in: head, caseSensitive: true) {
+                return service
+            }
+        }
+        // Ausgeschrieben, aber nur in der Kopfzeile: in Dateinamen wäre es Zufall.
+        if let name {
+            for (pattern, service) in serviceNames where matches(pattern, in: name) { return service }
+        }
+        if let url {
+            let host = url.host?.lowercased() ?? ""
+            if host.hasSuffix("real-debrid.com") { return .realDebrid }
+            if host.hasSuffix("torbox.app") { return .torBox }
+            if host.hasSuffix("webtor.io") || Webtor.isResolveLink(url) { return .webtor }
+        }
+        return nil
     }
 
     private static func groups(_ pattern: String, in text: String) -> [String]? {
@@ -132,6 +244,19 @@ public struct StreamInfo: Sendable, Hashable {
         return text.replacingOccurrences(of: ".", with: ",")
     }
 
+    /// Mittlere Bitrate in Mbit/s, aus Dateigröße und Laufzeit geschätzt.
+    public func bitrate(runtimeMinutes: Int?) -> Double? {
+        guard let sizeBytes, sizeBytes > 0, let runtimeMinutes, runtimeMinutes > 0 else { return nil }
+        return Double(sizeBytes) * 8 / Double(runtimeMinutes * 60) / 1_000_000
+    }
+
+    /// Bitrate als kurzer Text, etwa „41,5 MBIT/S“.
+    public func bitrateLabel(runtimeMinutes: Int?) -> String? {
+        guard let value = bitrate(runtimeMinutes: runtimeMinutes) else { return nil }
+        let text = value >= 10 ? String(format: "%.0f MBIT/S", value) : String(format: "%.1f MBIT/S", value)
+        return text.replacingOccurrences(of: ".", with: ",")
+    }
+
     public var audioLabel: String? {
         guard let audio else { return channels }
         return [audio.label, channels].compactMap { $0 }.joined(separator: " ")
@@ -147,11 +272,13 @@ public struct SourcedStream: Sendable, Hashable, Identifiable {
 
     public var id: String { "\(addonName)#\(index)" }
 
-    public init(stream: Stream, addonName: String, index: Int) {
+    public init(stream: Stream, addonName: String, index: Int, isWebtorAddon: Bool = false) {
         self.stream = stream
         self.addonName = addonName
         self.index = index
         self.info = StreamInfo(stream: stream)
+        // Webtor nennt bei Streams, die es selbst ausliefert, nicht immer einen Dienst.
+        if isWebtorAddon, info.service == nil { info.service = .webtor }
     }
 }
 
@@ -159,10 +286,35 @@ public enum StreamRanker {
     /// Sortiert abspielbare Streams so, dass der gewünschte zuerst steht.
     /// Reihenfolge der Kriterien: sofort verfügbar, Auflösung bis zur Obergrenze, Bild, Ton, Größe.
     /// Nicht abspielbare Quellen (Torrents ohne Debrid, externe Seiten) fallen heraus.
-    public static func ranked(_ streams: [SourcedStream], preferences: PlaybackSettings = .init()) -> [SourcedStream] {
+    ///
+    /// Mit einer anderen Sortierung rückt deren Kriterium nach vorn. Was erst geladen werden muss, bleibt immer hinten.
+    public static func ranked(
+        _ streams: [SourcedStream], preferences: PlaybackSettings = .init(), sort: StreamSort = .recommended
+    ) -> [SourcedStream] {
         streams
             .filter { $0.stream.playableURL != nil }
-            .sorted { score($0, preferences) > score($1, preferences) }
+            .sorted { key($0, preferences, sort) > key($1, preferences, sort) }
+    }
+
+    private static func key(_ item: SourcedStream, _ preferences: PlaybackSettings, _ sort: StreamSort) -> [Int] {
+        let base = score(item, preferences)
+        let megabytes = Int(clamping: (item.info.sizeBytes ?? 0) / 1_048_576)
+        let lead: [Int]
+        switch sort {
+        case .recommended: lead = []
+        // Bei gleicher Laufzeit ist die größte Datei die mit der höchsten Bitrate.
+        case .bitrate: lead = [megabytes]
+        // Ohne Größenangabe ans Ende, sonst die kleinste zuerst.
+        case .smallest: lead = [megabytes > 0 ? 1 : 0, -megabytes]
+        case .audio: lead = [item.info.audio?.rawValue ?? 0, channelCount(item.info.channels)]
+        case .release: lead = [item.info.release?.rawValue ?? 0]
+        }
+        return [base[0]] + lead + base.dropFirst()
+    }
+
+    private static func channelCount(_ channels: String?) -> Int {
+        guard let channels else { return 0 }
+        return channels.split(separator: ".").compactMap { Int($0) }.reduce(0, +)
     }
 
     private static func score(_ item: SourcedStream, _ preferences: PlaybackSettings) -> [Int] {
