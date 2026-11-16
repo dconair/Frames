@@ -134,7 +134,9 @@ jobs:
                   source = os.path.join("bilder", item.get("exportedFileName", ""))
                   name = item.get("suggestedHumanReadableName") or ""
                   if os.path.isfile(source) and name:
-                      os.replace(source, os.path.join("bilder", name.replace("/", "-")))
+                      # Namen mit Anführungszeichen und Ähnlichem nimmt der Upload nicht an.
+                      safe = "".join("-" if c in '/"`:<>|*?\r\n' else c for c in name)
+                      os.replace(source, os.path.join("bilder", safe))
           PY
           ls -la bilder
       - uses: actions/upload-artifact@v4

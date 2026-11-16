@@ -363,10 +363,11 @@ final class FramesUITests: XCTestCase {
 
     private func openRow(_ row: XCUIElement, in app: XCUIApplication) {
         let remote = XCUIRemote.shared
-        for _ in 0..<12 where !row.hasFocus {
+        for _ in 0..<12 where !focusedLabel(in: app).hasPrefix("Webtor.io") {
             remote.press(.down)
             sleep(1)
         }
+        print("FRAMES-UI Fokus vor dem Start: \(focusedLabel(in: app))")
         remote.press(.select)
     }
 
