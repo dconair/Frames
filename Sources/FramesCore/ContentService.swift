@@ -43,7 +43,10 @@ public struct ContentService: Sendable {
         var all = [SourcedStream]()
         for (position, streams) in results {
             for stream in streams {
-                all.append(SourcedStream(stream: stream, addonName: providers[position].manifest.name, index: index))
+                let addon = providers[position]
+                all.append(SourcedStream(
+                    stream: stream, addonName: addon.manifest.name, index: index, isWebtorAddon: Webtor.isWebtor(addon)
+                ))
                 index += 1
             }
         }

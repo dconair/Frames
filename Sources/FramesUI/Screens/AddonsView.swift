@@ -2,9 +2,13 @@
 import SwiftUI
 import FramesCore
 
-/// Die im Stremio-Konto installierten Addons. Frames zeigt sie an und ändert nichts daran.
+/// Die im Stremio-Konto installierten Addons. Neue lassen sich über ihre Adresse hinzufügen,
+/// etwa das persönliche Webtor-Addon. Entfernt wird weiterhin in Stremio.
 struct AddonsView: View {
     @Environment(AppModel.self) private var model
+    @State private var address = ""
+    @State private var installNote: (text: String, isError: Bool)?
+    @State private var isInstalling = false
 
     var body: some View {
         ScrollView {
@@ -50,6 +54,8 @@ struct AddonsView: View {
                         .font(.signalMono(15))
                         .foregroundStyle(Signal.Palette.danger)
                 }
+
+                install
             }
             .padding(.horizontal, PageInsets.horizontal)
             .padding(.top, PageInsets.top)
@@ -57,6 +63,86 @@ struct AddonsView: View {
         }
         .scrollIndicators(.hidden)
         .signalPage()
+    }
+
+    /// Addon über seine Adresse ins Konto holen. Bei Webtor ist die Adresse zugleich die Anmeldung.
+    private var install: some View {
+        VStack(alignment: .leading, spacing: Signal.pt(14)) {
+            HStack(spacing: Signal.pt(20)) {
+                Text("ADDON HINZUFÜGEN")
+                    .font(.signalMono(17, .bold))
+                    .tracking(1.2)
+                    .foregroundStyle(Signal.Palette.text)
+                Rectangle().fill(Signal.Palette.line).frame(height: 1)
+            }
+            Text("Füge die Adresse des Addons ein. Für Webtor: auf webtor.io anmelden, im Profil unter Stremio "
+                + "„Generate addon URL“ wählen und die Adresse hierher kopieren. Sie gilt nur für dein Konto, "
+                + "also behandle sie wie ein Passwort. Das Addon landet in deinem Stremio-Konto und gilt damit auf allen Geräten.")
+                .font(.signal(21))
+                .foregroundStyle(Signal.Palette.textSoft)
+                .fixedSize(horizontal: false, vertical: true)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Signal.pt(14)) {
+                    addressField
+                    installButton
+                }
+                VStack(alignment: .leading, spacing: Signal.pt(14)) {
+                    addressField
+                    installButton
+                }
+            }
+            if let installNote {
+                Text(installNote.text.uppercased())
+                    .font(.signalMono(15))
+                    .foregroundStyle(installNote.isError ? Signal.Palette.danger : Signal.Palette.lime)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("addon-meldung")
+            }
+        }
+    }
+
+    private var addressField: some View {
+        TextField("https://…/manifest.json", text: $address)
+            .font(.signalMono(18))
+            .foregroundStyle(Signal.Palette.text)
+            .autocorrectionDisabled()
+            .submitLabel(.done)
+            .onSubmit(submit)
+            .accessibilityIdentifier("addon-adresse")
+            #if !os(macOS)
+            .keyboardType(.URL)
+            .textInputAutocapitalization(.never)
+            #endif
+            #if os(macOS)
+            .textFieldStyle(.plain)
+            #endif
+            #if !os(tvOS)
+            .padding(.horizontal, Signal.pt(26))
+            .frame(minWidth: 220, minHeight: max(48, Signal.pt(72)))
+            .signalPanel()
+            #endif
+    }
+
+    private var installButton: some View {
+        Button(isInstalling ? "WIRD GEPRÜFT" : "HINZUFÜGEN", action: submit)
+            .buttonStyle(SignalButtonStyle(.primary))
+            .disabled(isInstalling || address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+
+    private func submit() {
+        guard !isInstalling else { return }
+        isInstalling = true
+        installNote = nil
+        Task {
+            switch await model.installAddon(address: address) {
+            case .success(let name):
+                address = ""
+                installNote = ("\(name) ist installiert.", false)
+            case .failure(let failure):
+                installNote = (failure.message, true)
+            }
+            isInstalling = false
+        }
     }
 
     private var reload: some View {
@@ -94,8 +180,12 @@ private struct AddonRow: View {
     }
 
     private var status: (String, Color) {
-        if addon.isReachable { return ("AKTIV", Signal.Palette.lime) }
-        return ("NICHT ERREICHBAR", Signal.Palette.textMuted)
+        guard addon.isReachable else { return ("NICHT ERREICHBAR", Signal.Palette.textMuted) }
+        // Webtor ohne persönliche Adresse und andere Addons, die noch eingerichtet werden wollen, liefern nichts.
+        if addon.manifest.needsConfiguration || (Webtor.isWebtor(addon) && !Webtor.isSignedIn(addon)) {
+            return ("EINRICHTUNG FEHLT", Signal.Palette.danger)
+        }
+        return ("AKTIV", Signal.Palette.lime)
     }
 
     private func label(for capability: String) -> String {

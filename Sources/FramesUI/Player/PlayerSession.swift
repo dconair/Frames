@@ -122,6 +122,17 @@ final class PlayerSession {
     func start(_ route: PlayerRoute, settings: PlaybackSettings, resumeAt: Double?) async {
         failure = nil
         hasEnded = false
+        // Webtor leitet erst beim Abspielen zur Datei weiter. Was es ablehnt, wird hier zum Hinweis.
+        let url: URL
+        switch await StreamLinkResolver().resolve(route.url, headers: route.headers) {
+        case .play(let target):
+            url = target
+        case .blocked(let message):
+            failure = message
+            isBusy = false
+            return
+        }
+        guard !Task.isCancelled else { return }
         var options = LoadOptions()
         options.httpHeaders = route.headers
         options.preferredAudioLanguages = [settings.audioLanguage, "en"]
@@ -130,9 +141,9 @@ final class PlayerSession {
         }
         do {
             if let resumeAt {
-                try await engine.load(url: route.url, startPosition: resumeAt, options: options)
+                try await engine.load(url: url, startPosition: resumeAt, options: options)
             } else {
-                try await engine.load(url: route.url, options: options)
+                try await engine.load(url: url, options: options)
             }
         } catch is CancellationError {
             // Ein neuerer Ladevorgang hat diesen abgelöst.
