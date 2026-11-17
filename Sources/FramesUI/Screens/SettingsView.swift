@@ -2,12 +2,13 @@
 import SwiftUI
 import FramesCore
 
-/// Einstellungen: Wiedergabe mit den Skip-Intervallen, darunter das Konto.
+/// Einstellungen: Wiedergabe mit den Skip-Intervallen, darunter Erscheinungsbild und Konto.
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         @Bindable var model = model
+        @Bindable var appearance = SignalAppearance.shared
         ScrollView {
             VStack(alignment: .leading, spacing: Signal.pt(10)) {
                 SignalPageHeader(eyebrow: "Einstellungen // Wiedergabe", title: "Wiedergabe")
@@ -39,6 +40,17 @@ struct SettingsView: View {
                 }
                 SettingRow("Dolby Vision bevorzugen", detail: "Wird bei „Abspielen“ zuerst gewählt") {
                     SignalSegments([(true, "AN"), (false, "AUS")], selection: $model.settings.preferDolbyVision)
+                }
+
+                SignalEyebrow("Einstellungen // Erscheinungsbild")
+                    .padding(.top, Signal.pt(40))
+                    .padding(.bottom, Signal.pt(8))
+
+                SettingRow("Farbthema", detail: "Farben der ganzen App") {
+                    SignalSegments(SignalColorTheme.allCases.map { ($0, $0.label) }, selection: $appearance.theme)
+                }
+                SettingRow("Schrift", detail: "Standard oder kantig wie auf einer Konsole") {
+                    SignalSegments(SignalTypeface.allCases.map { ($0, $0.label) }, selection: $appearance.typeface)
                 }
 
                 SignalEyebrow("Einstellungen // Konto")
