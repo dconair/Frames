@@ -38,7 +38,7 @@ jobs:
             DEVELOPMENT_TEAM= 2>&1 | grep -E "error:|warning: unable|BUILD (SUCCEEDED|FAILED)" || true
           test -d build/Build/Products/Release/Frames.app
       - name: App prüfen (Frameworks und Icon im Paket)
-        run: scripts/pruefe-mac-app.sh build/Build/Products/Release/Frames.app
+        run: scripts/pruefe-mac-app.sh build/Build/Products/Release/Frames.app --signatur
       - name: DMG packen
         run: |
           mkdir dmg

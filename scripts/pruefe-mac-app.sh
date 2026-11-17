@@ -1,8 +1,10 @@
 #!/bin/bash
 # Prüft eine gebaute Mac-App: Liegen alle Frameworks, die sie beim Start sucht, im Paket? Steckt das Icon drin?
-# Aufruf: scripts/pruefe-mac-app.sh pfad/zu/Frames.app
+# Aufruf: scripts/pruefe-mac-app.sh pfad/zu/Frames.app [--signatur]
+# Mit --signatur wird zusätzlich die (Ad-hoc-)Signatur geprüft, nur sinnvoll bei signierten Builds.
 set -u
 APP="${1:?Pfad zur .app fehlt}"
+SIGNATUR="${2:-}"
 BIN="$APP/Contents/MacOS/$(basename "$APP" .app)"
 fehler=0
 
@@ -40,6 +42,8 @@ else
 fi
 
 # Signatur
-codesign --verify --deep --strict "$APP" 2>&1 && echo "ok      Signatur (Ad-hoc) stimmig" || { echo "FEHLER: Signatur ungültig"; fehler=1; }
+if [ "$SIGNATUR" = "--signatur" ]; then
+  codesign --verify --deep --strict "$APP" 2>&1 && echo "ok      Signatur stimmig" || { echo "FEHLER: Signatur ungültig"; fehler=1; }
+fi
 
 exit $fehler
