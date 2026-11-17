@@ -157,10 +157,13 @@ struct AddonsView: View {
 private struct AddonRow: View {
     let addon: InstalledAddon
 
-    private static let tints: [Color] = [
-        Signal.Palette.lime, Color(hex: 0x8A7BFF), Signal.Palette.text, Color(hex: 0xE59A62),
-        Color(hex: 0x17BEBB), Color(hex: 0xF2C14E), Signal.Palette.cyan,
-    ]
+    /// Berechnet, damit die Farben dem gewählten Farbthema folgen.
+    private static var tints: [Color] {
+        [
+            Signal.Palette.lime, Color(hex: 0x8A7BFF), Signal.Palette.text, Color(hex: 0xE59A62),
+            Color(hex: 0x17BEBB), Color(hex: 0xF2C14E), Signal.Palette.cyan,
+        ]
+    }
 
     private var initials: String {
         let words = addon.manifest.name.split(whereSeparator: { !$0.isLetter && !$0.isNumber })

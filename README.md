@@ -73,6 +73,6 @@ Die Adresse ist die ganze Anmeldung und gilt nur für das eigene Konto. Streams,
 
 - Das Passwort geht nur an Stremio. Gespeichert wird allein der Sitzungsschlüssel.
 - Die Adressen von Debrid-Addons enthalten den persönlichen Schlüssel. Frames schreibt sie nie in Logs oder Fehlermeldungen.
-- Schriften: Space Grotesk und JetBrains Mono, beide unter der SIL Open Font License. Die Lizenztexte liegen neben den Schriftdateien.
+- Schriften: Space Grotesk und JetBrains Mono (Standard) sowie Chakra Petch und Azeret Mono (Konsole), alle unter der SIL Open Font License. Schrift und Farbthema (Limette, Phosphor) wählt man unter Einstellungen › Erscheinungsbild. Die Lizenztexte liegen neben den Schriftdateien.
 - AetherEngine steht unter LGPL-3.0 mit App-Store-Ausnahme, FFmpeg und die übrigen Abhängigkeiten unter ihren eigenen Lizenzen.
 - Frames ist kein offizielles Stremio-Produkt.
