@@ -40,7 +40,7 @@ xcodegen generate
 open Frames.xcodeproj
 ```
 
-In Xcode das Ziel „Frames“ wählen, ein Gerät aussuchen (iPhone, iPad, Apple TV oder „My Mac“) und starten. Für ein echtes Gerät unter „Signing & Capabilities“ das eigene Team eintragen.
+In Xcode das Ziel „Frames“ wählen, ein Gerät aussuchen (iPhone, iPad, Apple TV oder „My Mac“) und starten. Für ein echtes Gerät unter „Signing & Capabilities“ das eigene Team eintragen. Die ausführliche Anleitung mit kostenloser Apple-ID steht in [docs/auf-geraet-installieren.md](docs/auf-geraet-installieren.md).
 
 Tests des Kerns:
 

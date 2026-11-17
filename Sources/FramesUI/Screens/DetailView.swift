@@ -101,7 +101,7 @@ struct DetailView: View {
                 if !meta.isSeries {
                     NavigationLink(value: StreamsRoute(item: PlaybackItem(
                         metaId: meta.id, type: meta.type, name: meta.name, poster: meta.poster?.absoluteString,
-                        videoId: meta.streamId(), subtitle: meta.releaseInfo
+                        videoId: meta.streamId(), subtitle: meta.releaseInfo, runtimeMinutes: meta.runtimeMinutes
                     ))) {
                         Text("▶  ABSPIELEN")
                     }
@@ -148,7 +148,8 @@ struct DetailView: View {
                     NavigationLink(value: StreamsRoute(item: PlaybackItem(
                         metaId: meta.id, type: meta.type, name: meta.name, poster: meta.poster?.absoluteString,
                         videoId: meta.streamId(for: episode),
-                        subtitle: [episode.code, episode.title].compactMap { $0 }.joined(separator: " · ")
+                        subtitle: [episode.code, episode.title].compactMap { $0 }.joined(separator: " · "),
+                        runtimeMinutes: meta.runtimeMinutes
                     ))) {
                         EpisodeRow(episode: episode)
                     }

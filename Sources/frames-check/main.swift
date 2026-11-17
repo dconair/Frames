@@ -197,11 +197,41 @@ for item in ranked.prefix(5) {
     note("\(alias(item.addonName)): \(badges.isEmpty ? "ohne Technik-Angaben" : badges)")
 }
 
+let byService = Dictionary(grouping: ranked, by: { $0.info.service?.name ?? "ohne erkannten Dienst" }).mapValues(\.count)
+if !ranked.isEmpty {
+    note("Abspielbar nach Dienst: " + byService.sorted { $0.key < $1.key }.map { "\($0.value) × \($0.key)" }.joined(separator: ", "))
+}
+
+// MARK: Webtor
+
+if let webtor = addons.first(where: Webtor.isWebtor) {
+    step("Webtor")
+    if !Webtor.isSignedIn(webtor) {
+        warn("Das Webtor-Addon ist ohne persönliche Adresse installiert und liefert so nichts. "
+            + "Im Webtor-Profil „Generate addon URL“ wählen und die Adresse in Frames unter Addons einfügen.")
+    } else {
+        let own = ranked.filter { Webtor.isResolveLink($0.stream.url ?? URL(fileURLWithPath: "/")) }
+        ok("Das Webtor-Addon ist eingerichtet und liefert \(own.count) abspielbare Streams für diesen Titel.")
+        if let first = own.first, let url = first.stream.playableURL {
+            switch await StreamLinkResolver().resolve(url, headers: first.stream.requestHeaders) {
+            case .play(let target) where target != url:
+                ok("Webtor leitet zur Datei weiter. Der Player bekommt die Adresse der Datei.")
+            case .play:
+                note("Webtor hat auf die Nachfrage nicht mit einer Weiterleitung geantwortet. Der Player versucht es dann selbst.")
+            case .blocked(let message):
+                warn("Webtor gibt den ersten Stream nicht frei: \(message)")
+            }
+        }
+    }
+}
+
 // MARK: Abruf wie im Player
 
 if let best = ranked.first, let url = best.stream.playableURL {
     step("Abruf des besten Links")
-    var request = URLRequest(url: url)
+    var target = url
+    if case .play(let resolved) = await StreamLinkResolver().resolve(url, headers: best.stream.requestHeaders) { target = resolved }
+    var request = URLRequest(url: target)
     request.setValue("bytes=0-1023", forHTTPHeaderField: "Range")
     for (name, value) in best.stream.requestHeaders { request.setValue(value, forHTTPHeaderField: name) }
     request.timeoutInterval = 30

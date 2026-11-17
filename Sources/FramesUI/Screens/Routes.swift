@@ -36,6 +36,8 @@ struct PlaybackItem: Hashable {
     var videoId: String
     /// Zweite Zeile, etwa „S03 E01 · Titel der Folge“ oder das Jahr.
     var subtitle: String?
+    /// Laufzeit in Minuten, wenn das Addon sie nennt. Daraus schätzt die Quellenliste die Bitrate.
+    var runtimeMinutes: Int? = nil
 }
 
 struct StreamsRoute: Hashable {

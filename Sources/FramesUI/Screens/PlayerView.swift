@@ -91,7 +91,7 @@ private struct PlayerStage: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
 
-            if TestHooks.video != nil {
+            if TestHooks.video != nil || TestHooks.sampleStreams != nil {
                 // Daran lesen die Simulator-Tests ab, ob Bild und Zeit wirklich laufen.
                 Color.clear
                     .frame(width: 1, height: 1)
