@@ -314,7 +314,9 @@ final class FramesUITests: XCTestCase {
         // Die Folgenliste.
         #if os(tvOS)
         XCUIRemote.shared.press(.down)
-        sleep(2)
+        for _ in 0..<10 where focusedLabel(in: app) != "FOLGEN" {
+            usleep(300_000)
+        }
         print("FRAMES-UI Folgen Fokus: \(focusedLabel(in: app))")
         XCUIRemote.shared.press(.select)
         #else
@@ -339,6 +341,9 @@ final class FramesUITests: XCTestCase {
     private func pressSkip(in app: XCUIApplication) {
         #if os(tvOS)
         // Der Fokus springt von selbst auf die Taste.
+        for _ in 0..<10 where !focusedLabel(in: app).contains("ÜBERSPRINGEN") {
+            usleep(300_000)
+        }
         print("FRAMES-UI Folgen Fokus: \(focusedLabel(in: app))")
         XCUIRemote.shared.press(.select)
         #else

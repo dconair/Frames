@@ -156,14 +156,14 @@ private struct PlayerStage: View {
         // Erscheint „Intro überspringen“ oder die Karte zur nächsten Folge, liegt der Fokus darauf wie bei Netflix.
         .onChange(of: flow.activeSkip) { _, segment in
             if segment != nil, panel == nil, !controlsVisible || focus == .surface {
-                focus = .segmentSkip
+                focusSoon(.segmentSkip)
             } else if segment == nil, focus == .segmentSkip {
                 focus = .surface
             }
         }
         .onChange(of: flow.card) { old, card in
             if card != nil, old == nil, panel == nil {
-                focus = .nextEpisode
+                focusSoon(.nextEpisode)
             } else if card == nil, focus == .nextEpisode {
                 focus = .surface
             }
@@ -236,10 +236,7 @@ private struct PlayerStage: View {
                 // Die Fläche füllt den ganzen Bildschirm, darunter liegt für die Fokus-Steuerung nichts.
                 // Deshalb führt „runter“ ausdrücklich zu den Tasten unten, bei Serien zuerst zu den Folgen.
                 showControls()
-                Task { @MainActor in
-                    await Task.yield()
-                    focus = flow.isSeries ? .episodes : .tracks
-                }
+                focusSoon(flow.isSeries ? .episodes : .tracks)
             default: showControls()
             }
         }
@@ -446,6 +443,14 @@ private struct PlayerStage: View {
     private func open(_ kind: Panel) {
         hideTask?.cancel()
         panel = kind
+    }
+
+    /// Setzt den Fokus, sobald das Ziel gezeichnet ist. Direkt beim Einblenden greift er auf dem Fernseher noch nicht.
+    private func focusSoon(_ target: FocusTarget) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(200))
+            focus = target
+        }
     }
 
     private func closePanel() {
