@@ -7,6 +7,7 @@ public struct RootView: View {
     @State private var model: AppModel
     /// Die Start-Animation liegt über allem, bis sie durchgelaufen ist.
     @State private var showsLaunch = TestHooks.video == nil
+    private let launchStyle = StartPreferences.styleForThisLaunch
 
     @MainActor
     public init() {
@@ -17,6 +18,12 @@ public struct RootView: View {
     public init(model: AppModel) {
         _model = State(initialValue: model)
     }
+
+    /// Für den Test mit `-frames-folgen`: der Testfilm als erste Folge einer bekannten Serie.
+    private static let episodeTestItem = PlaybackItem(
+        metaId: "tt0903747", type: "series", name: "Breaking Bad", poster: nil,
+        videoId: "tt0903747:1:1", subtitle: "S01 E01 · Pilot"
+    )
 
     public var body: some View {
         ZStack {
@@ -30,7 +37,9 @@ public struct RootView: View {
             case .ready:
                 if let video = TestHooks.video {
                     NavigationStack {
-                        PlayerView(route: PlayerRoute(url: video, headers: [:], item: TestHooks.opensXRay
+                        PlayerView(route: PlayerRoute(url: video, headers: [:], item: TestHooks.playsEpisodes
+                            ? Self.episodeTestItem
+                            : TestHooks.opensXRay
                             ? PlaybackItem(
                                 metaId: "tt0903747", type: "series", name: "Breaking Bad", poster: nil,
                                 videoId: "tt0903747:2:3", subtitle: "S02 E03 · Bit by a Dead Bee", year: 2008
@@ -46,21 +55,24 @@ public struct RootView: View {
                 }
             }
             if showsLaunch {
-                LaunchAnimation()
+                LaunchAnimation(style: launchStyle)
                     .transition(.opacity)
                     .zIndex(1)
             }
         }
         .animation(Signal.Motion.sheet, value: model.phase)
+        .modifier(DeepLinkPresenter())
         .environment(model)
         .preferredColorScheme(.dark)
         .tint(Signal.Palette.lime)
         .task { await model.start() }
+        .task { await StartPreferences.shared.applyDockIcon() }
         .task {
-            try? await Task.sleep(for: .milliseconds(LaunchAnimation.duration))
+            try? await Task.sleep(for: .milliseconds(launchStyle.duration))
             withAnimation(.easeOut(duration: 0.4)) { showsLaunch = false }
         }
         .onChange(of: model.settings) { _, _ in model.saveSettings() }
+        .onOpenURL { model.open($0) }
     }
 }
 

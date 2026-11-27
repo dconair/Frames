@@ -308,6 +308,11 @@ final class FramesUITests: XCTestCase {
         #if os(tvOS)
         XCUIRemote.shared.press(.down)
         sleep(2)
+        // Bei Serien steht der Fokus zuerst auf FOLGEN, X-RAY liegt rechts daneben.
+        for _ in 0..<4 where !button.hasFocus {
+            XCUIRemote.shared.press(.right)
+            sleep(1)
+        }
         print("FRAMES-UI Fokus vor X-Ray: \(focusedLabel(in: app))")
         XCUIRemote.shared.press(.select)
         #else
@@ -361,6 +366,197 @@ final class FramesUITests: XCTestCase {
         snap("34-XRay-QR")
         XCUIRemote.shared.press(.menu)
         sleep(2)
+        #endif
+    }
+
+    // MARK: Start-Animationen und App-Symbol
+
+    /// Startet die App einmal je Start-Animation und hält sie mit Bildschirmfotos fest. Die CI nimmt dazu ein Video auf.
+    func testStartanimationen() {
+        let styles = ["stapel", "filmstreifen", "auffaechern", "zeichnen", "blitz", "abtaster", "countdown", "huepfer"]
+        for style in styles {
+            let app = XCUIApplication()
+            app.launchArguments = ["-frames-gast", "-frames-start", style]
+            app.launch()
+            usleep(900_000)
+            snap("20-Start-\(style)-1")
+            usleep(900_000)
+            snap("20-Start-\(style)-2")
+            sleep(2)
+            print("FRAMES-UI Start-Animation \(style) gelaufen")
+            app.terminate()
+        }
+    }
+
+    /// Zeigt unter Einstellungen den Bereich „Start“ mit der Wahl der Animation und der App-Symbole.
+    func testStartEinstellungen() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-frames-gast"]
+        app.launch()
+        XCTAssertTrue(waitForContent(in: app, seconds: 60), "Home ist nicht erschienen.")
+        guard openSection("Einstellungen", in: app) else {
+            XCTFail("Einstellungen nicht erreicht")
+            return
+        }
+        sleep(2)
+        #if os(tvOS)
+        let remote = XCUIRemote.shared
+        for _ in 0..<9 {
+            remote.press(.down)
+            usleep(300_000)
+        }
+        #else
+        app.swipeUp()
+        app.swipeUp()
+        #endif
+        sleep(2)
+        snap("30-Einstellungen-Start-1")
+        let chip = app.buttons["BLITZ"].firstMatch
+        if chip.waitForExistence(timeout: 5) {
+            #if os(tvOS)
+            for _ in 0..<4 where !chip.hasFocus {
+                XCUIRemote.shared.press(.right)
+                usleep(300_000)
+            }
+            XCUIRemote.shared.press(.select)
+            #else
+            chip.tap()
+            #endif
+            sleep(2)
+            snap("31-Einstellungen-Start-Vorschau")
+            sleep(2)
+            snap("32-Einstellungen-Start-Vorschau")
+        } else {
+            note("Start-Einstellungen", texts(in: app))
+        }
+        #if !os(tvOS)
+        app.swipeUp()
+        sleep(1)
+        snap("33-Einstellungen-Symbole")
+        #endif
+    }
+
+    // MARK: Folgen
+
+    /// Der Testfilm als erste Folge von Breaking Bad mit festen Marken: Rückblick und Intro überspringen,
+    /// im Abspann der Countdown, danach startet die zweite Folge im selben Player, dann die Folgenliste.
+    func testFolgen() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-frames-gast", "-frames-folgen"]
+        app.launchEnvironment = ["FRAMES_TEST_VIDEO": sampleMP4]
+        app.launch()
+
+        let status = app.descendants(matching: .any)["player-status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 30), "Der Player ist nicht erschienen.")
+        _ = wait(for: "bild=true", in: status, seconds: 60)
+        print("FRAMES-UI Folgen Start: \(status.label)")
+
+        // Rückblick, dann Intro: jeweils die Taste unten rechts.
+        for kind in ["recap", "intro"] {
+            guard wait(for: "taste=\(kind)", in: status, seconds: 25) else {
+                print("FRAMES-UI Folgen: keine Taste für \(kind): \(status.label)")
+                continue
+            }
+            sleep(1)
+            snap("30-Folgen-Taste-\(kind)")
+            pressSkip(in: app)
+            sleep(2)
+            print("FRAMES-UI Folgen nach Überspringen \(kind): \(status.label)")
+        }
+
+        // Abspann: die Karte mit dem Countdown.
+        let counting = wait(for: "karte=counting", in: status, seconds: 50)
+        print("FRAMES-UI Folgen Abspann: \(status.label)")
+        XCTAssertTrue(counting, "Im Abspann erscheint keine Karte zur nächsten Folge.")
+        sleep(2)
+        snap("31-Folgen-Countdown")
+        sleep(4)
+        snap("32-Folgen-Countdown-später")
+
+        let switched = wait(for: "folge=tt0903747:1:2", in: status, seconds: 30)
+        print("FRAMES-UI Folgen danach: \(status.label)")
+        XCTAssertTrue(switched, "Die nächste Folge startet nicht.")
+        _ = wait(for: "bild=true", in: status, seconds: 30)
+        sleep(3)
+        snap("33-Folgen-nächste-Folge")
+
+        // Die Folgenliste.
+        #if os(tvOS)
+        XCUIRemote.shared.press(.down)
+        for _ in 0..<10 where focusedLabel(in: app) != "FOLGEN" {
+            usleep(300_000)
+        }
+        print("FRAMES-UI Folgen Fokus: \(focusedLabel(in: app))")
+        XCUIRemote.shared.press(.select)
+        #else
+        app.tap()
+        let button = app.buttons["episodes-button"]
+        if button.waitForExistence(timeout: 5) { button.tap() }
+        #endif
+        sleep(3)
+        snap("34-Folgen-Liste")
+        print("FRAMES-UI Folgen Liste offen: \(app.staticTexts["S01 E02"].exists)")
+        sleep(3)
+    }
+
+    /// Einstellung „Auto“: die Taste füllt sich fünf Sekunden lang, dann springt der Player von selbst,
+    /// ohne dass etwas gedrückt wird.
+    func testFolgenAutomatisch() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-frames-gast", "-frames-folgen", "-frames-auto-skip"]
+        app.launchEnvironment = ["FRAMES_TEST_VIDEO": sampleMP4]
+        app.launch()
+
+        let status = app.descendants(matching: .any)["player-status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 30), "Der Player ist nicht erschienen.")
+        _ = wait(for: "bild=true", in: status, seconds: 60)
+
+        // Rückblick 1–10 s, Intro 14–24 s. Ohne Sprung bräuchte die Wiedergabe jeweils rund 10 Sekunden
+        // vom Erscheinen der Taste bis zum Ende, mit dem Countdown von 5 Sekunden sind es etwa 5.
+        for (kind, end) in [("recap", 10), ("intro", 24)] {
+            XCTAssertTrue(wait(for: "taste=\(kind)", in: status, seconds: 25), "Keine Taste für \(kind): \(status.label)")
+            XCTAssertFalse(status.label.contains("zaehler=-"), "Kein Countdown auf der Taste: \(status.label)")
+            let shownAt = time(in: status.label)
+            let started = Date()
+            print("FRAMES-UI Auto \(kind) Countdown: \(status.label)")
+            sleep(2)
+            snap("36-Auto-Countdown-\(kind)")
+            var jumped = false
+            for _ in 0..<20 where !jumped {
+                jumped = time(in: status.label) >= end
+                if !jumped { usleep(500_000) }
+            }
+            print("FRAMES-UI Auto nach \(kind): \(status.label)")
+            XCTAssertTrue(jumped, "\(kind) wurde nicht von selbst übersprungen: \(status.label)")
+            let waited = Date().timeIntervalSince(started)
+            XCTAssertLessThan(waited, Double(end - shownAt) - 2, "\(kind) lief einfach durch statt zu springen.")
+        }
+    }
+
+    private func wait(for text: String, in status: XCUIElement, seconds: Int) -> Bool {
+        for _ in 0..<(seconds * 2) {
+            if status.label.contains(text) { return true }
+            usleep(500_000)
+        }
+        return false
+    }
+
+    private func pressSkip(in app: XCUIApplication) {
+        #if os(tvOS)
+        // Der Fokus springt von selbst auf die Taste.
+        for _ in 0..<10 where !focusedLabel(in: app).contains("ÜBERSPRINGEN") {
+            usleep(300_000)
+        }
+        let focused = focusedLabel(in: app)
+        print("FRAMES-UI Folgen Fokus: \(focused)")
+        if focused.contains("ÜBERSPRINGEN") {
+            XCUIRemote.shared.press(.select)
+        } else {
+            print("FRAMES-UI Folgen: Taste ohne Fokus, nichts gedrückt")
+        }
+        #else
+        let button = app.buttons["segment-skip"]
+        if button.waitForExistence(timeout: 3) { button.tap() }
         #endif
     }
 

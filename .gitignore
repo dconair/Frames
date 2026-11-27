@@ -5,3 +5,5 @@ DerivedData/
 xcuserdata/
 *.xcodeproj
 Package.resolved
+# Erzeugt xcodegen aus project.yml
+Config/*-Info.plist

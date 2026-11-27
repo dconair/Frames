@@ -60,7 +60,8 @@ struct StreamsView: View {
                             ForEach(Array(streams.enumerated()), id: \.element.id) { position, item in
                                 if let url = item.stream.playableURL {
                                     NavigationLink(value: PlayerRoute(
-                                        url: url, headers: item.stream.requestHeaders, item: route.item
+                                        url: url, headers: item.stream.requestHeaders, item: route.item,
+                                        origin: StreamOrigin(item)
                                     )) {
                                         StreamRow(
                                             item: item,

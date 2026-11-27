@@ -51,6 +51,8 @@ struct PlayerRoute: Hashable {
     var url: URL
     var headers: [String: String]
     var item: PlaybackItem
+    /// Addon, Gruppe und Auflösung der gewählten Quelle. Daran sucht der Player die Quelle der nächsten Folge aus.
+    var origin: StreamOrigin? = nil
 }
 
 extension View {

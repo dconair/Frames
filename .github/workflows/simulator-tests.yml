@@ -67,6 +67,32 @@ jobs:
             | tee xcodebuild.log \
             | grep -E "FRAMES-UI|error:|Test Case|Test Suite|TEST (SUCCEEDED|FAILED)|Executed|BUILD FAILED|Testing failed" || true
           grep -q "TEST SUCCEEDED" xcodebuild.log
+      - name: Start-Animationen aufnehmen
+        if: always()
+        run: |
+          mkdir -p start
+          xcrun simctl io "$UDID" recordVideo --codec h264 --force "start/start-animationen-${{ matrix.platform }}.mp4" &
+          AUFNAHME=$!
+          sleep 3
+          xcodebuild test \
+            -project Frames.xcodeproj \
+            -scheme Frames \
+            -destination "id=$UDID" \
+            -resultBundlePath start.xcresult \
+            -only-testing:FramesUITests/FramesUITests/testStartanimationen \
+            -only-testing:FramesUITests/FramesUITests/testStartEinstellungen \
+            -skipPackagePluginValidation 2>&1 \
+            | grep -E "FRAMES-UI|error:|Test Case|TEST (SUCCEEDED|FAILED)" || true
+          kill -INT $AUFNAHME
+          wait $AUFNAHME || true
+          xcrun xcresulttool export attachments --path start.xcresult --output-path start/bilder || true
+          ls -la start
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: start-${{ matrix.platform }}
+          path: start
+          if-no-files-found: ignore
       # Läuft mit einer festen Beispielliste, zeigt also nichts aus dem Konto.
       - name: Sortieren und Filtern aufnehmen
         run: |
@@ -116,6 +142,32 @@ jobs:
         with:
           name: xray-${{ matrix.platform }}
           path: xray
+          if-no-files-found: ignore
+      - name: Folgen aufnehmen
+        if: success() || failure()
+        run: |
+          mkdir -p folgen
+          xcrun simctl io "$UDID" recordVideo --codec h264 --force "folgen/folgen-${{ matrix.platform }}.mp4" &
+          AUFNAHME=$!
+          sleep 3
+          xcodebuild test \
+            -project Frames.xcodeproj \
+            -scheme Frames \
+            -destination "id=$UDID" \
+            -only-testing:FramesUITests/FramesUITests/testFolgen \
+            -only-testing:FramesUITests/FramesUITests/testFolgenAutomatisch \
+            -resultBundlePath folgen.xcresult \
+            -skipPackagePluginValidation 2>&1 \
+            | grep -E "FRAMES-UI|error:|Test Case|TEST (SUCCEEDED|FAILED)" || true
+          kill -INT $AUFNAHME
+          wait $AUFNAHME || true
+          xcrun xcresulttool export attachments --path folgen.xcresult --output-path folgen/bilder || true
+          ls -la folgen folgen/bilder || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: folgen-${{ matrix.platform }}
+          path: folgen
           if-no-files-found: ignore
       - name: Vorschau mit dem Konto aufnehmen
         env:

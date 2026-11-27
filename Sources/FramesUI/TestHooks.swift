@@ -10,6 +10,12 @@ enum TestHooks {
     /// Ohne Konto starten, mit der Grundausstattung an Addons, die Stremio jedem neuen Konto gibt.
     static var isGuest: Bool { process.arguments.contains("-frames-gast") }
 
+    /// Erzwingt eine Start-Animation: `-frames-start blitz`.
+    static var launchStyle: LaunchStyle? {
+        guard let index = process.arguments.firstIndex(of: "-frames-start"), index + 1 < process.arguments.count else { return nil }
+        return LaunchStyle(rawValue: process.arguments[index + 1])
+    }
+
     /// Zugangsdaten, mit denen sich die App beim Start selbst anmeldet.
     static var login: (email: String, password: String)? {
         guard let email = process.environment["FRAMES_TEST_EMAIL"], !email.isEmpty,
@@ -24,6 +30,32 @@ enum TestHooks {
 
     /// Der Testfilm tritt als bekannte Serienfolge auf, damit das X-Ray echte Besetzung und Musik zeigt.
     static var opensXRay: Bool { process.arguments.contains("-frames-xray") }
+
+    /// Der Testfilm tritt als erste Folge einer bekannten Serie auf, mit festen Zeitmarken für Rückblick,
+    /// Intro und Abspann. So lassen sich Überspringen, Countdown und Folgenliste ohne Konto zeigen.
+    static var playsEpisodes: Bool { process.arguments.contains("-frames-folgen") }
+
+    /// Rückblick und Intro mit Countdown automatisch überspringen statt nur die Taste zu zeigen.
+    static var autoSkip: Bool { process.arguments.contains("-frames-auto-skip") }
+
+    /// Zeitmarken passend zum etwa 52 Sekunden langen Testfilm.
+    static var sampleSegments: MediaSegments? {
+        guard playsEpisodes else { return nil }
+        return MediaSegments([
+            MediaSegment(kind: .recap, start: 1, end: 10, source: .test),
+            MediaSegment(kind: .intro, start: 14, end: 24, source: .test),
+            MediaSegment(kind: .credits, start: 36, end: nil, source: .test),
+        ])
+    }
+
+    /// Jede Folge spielt im Test wieder den freien Testfilm.
+    static var episodeStreams: [SourcedStream]? {
+        guard playsEpisodes, let video else { return nil }
+        return [SourcedStream(
+            stream: FramesCore.Stream(url: video, name: "[RD+] Test 1080p", title: "Serie.S01E02.1080p.WEB-DL.mkv", bingeGroup: "test|1080p"),
+            addonName: "Test", index: 0
+        )]
+    }
 
     /// Eine feste Quellenliste statt der Antworten der Addons, damit sich Sortierung und Filter ohne Konto zeigen lassen.
     /// Jede Zeile spielt dasselbe frei verfügbare Testvideo.
@@ -51,10 +83,15 @@ enum TestHooks {
     }
     #else
     static let isGuest = false
+    static let launchStyle: LaunchStyle? = nil
     static let sampleStreams: [SourcedStream]? = nil
     static let login: (email: String, password: String)? = nil
     static let video: URL? = nil
     static let opensXRay = false
+    static let playsEpisodes = false
+    static let autoSkip = false
+    static let sampleSegments: MediaSegments? = nil
+    static let episodeStreams: [SourcedStream]? = nil
     #endif
 }
 #endif

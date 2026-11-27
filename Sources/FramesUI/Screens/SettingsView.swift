@@ -23,13 +23,16 @@ struct SettingsView: View {
                 SettingRow("Bildvorschau beim Spulen", detail: "Vorschaubild mit Zeitmarke über der Zeitleiste") {
                     SignalSegments([(true, "AN"), (false, "AUS")], selection: $model.settings.scrubPreview)
                 }
-                SettingRow("Intro überspringen", detail: "Wenn ein Addon Intro-Marken liefert") {
+                SettingRow(
+                    "Intro und Rückblick überspringen",
+                    detail: "Taste: Einblendung zum Antippen · Auto: Taste füllt sich, nach \(EpisodeFlow.skipCountdown) Sekunden wird gesprungen"
+                ) {
                     SignalSegments(
                         [(IntroSkipMode.showButton, "TASTE"), (IntroSkipMode.automatic, "AUTO"), (IntroSkipMode.off, "AUS")],
                         selection: $model.settings.introSkip
                     )
                 }
-                SettingRow("Nächste Folge", detail: "Startet nach dem Abspann") {
+                SettingRow("Nächste Folge automatisch", detail: "Countdown von \(EpisodeFlow.countdown) Sekunden, sobald der Abspann läuft") {
                     SignalSegments([(true, "AN"), (false, "AUS")], selection: $model.settings.autoplayNextEpisode)
                 }
                 SettingRow("Höchste Auflösung", detail: "Größere Streams rücken nach hinten") {
@@ -54,6 +57,8 @@ struct SettingsView: View {
                 }
 
                 SpotifySettings()
+
+                StartSettingsSection()
 
                 SignalEyebrow("Einstellungen // Konto")
                     .padding(.top, Signal.pt(40))
