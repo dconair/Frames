@@ -308,6 +308,11 @@ final class FramesUITests: XCTestCase {
         #if os(tvOS)
         XCUIRemote.shared.press(.down)
         sleep(2)
+        // Bei Serien steht der Fokus zuerst auf FOLGEN, X-RAY liegt rechts daneben.
+        for _ in 0..<4 where !button.hasFocus {
+            XCUIRemote.shared.press(.right)
+            sleep(1)
+        }
         print("FRAMES-UI Fokus vor X-Ray: \(focusedLabel(in: app))")
         XCUIRemote.shared.press(.select)
         #else
