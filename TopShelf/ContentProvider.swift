@@ -23,7 +23,6 @@ final class ContentProvider: TVTopShelfContentProvider {
             item.title = entry.name
             item.summary = entry.subtitle
             item.setImageURL(background, for: [.screenScale1x, .screenScale2x])
-            item.playbackProgress = entry.progress ?? 0
             if let link = entry.link {
                 item.displayAction = TVTopShelfAction(url: link)
                 item.playAction = TVTopShelfAction(url: link)
