@@ -134,6 +134,7 @@ final class FramesUITests: XCTestCase {
         app.launch()
 
         let loaded = waitForContent(in: app, seconds: 90)
+        try skipIfPasswordResetRequired(in: app, loaded: loaded)
         let stillAtLogin = app.staticTexts["Mit Stremio anmelden"].exists
         XCTAssertFalse(stillAtLogin, "Die App steht nach der Anmeldung noch auf der Anmeldeseite.")
         XCTAssertTrue(loaded, "Nach der Anmeldung sind keine Kataloge erschienen.")
@@ -159,7 +160,9 @@ final class FramesUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment = ["FRAMES_TEST_EMAIL": email, "FRAMES_TEST_PASSWORD": password]
         app.launch()
-        XCTAssertTrue(waitForContent(in: app, seconds: 90), "Nach der Anmeldung sind keine Kataloge erschienen.")
+        let loaded = waitForContent(in: app, seconds: 90)
+        try skipIfPasswordResetRequired(in: app, loaded: loaded)
+        XCTAssertTrue(loaded, "Nach der Anmeldung sind keine Kataloge erschienen.")
         sleep(5)
         browse(in: app)
 
@@ -362,6 +365,16 @@ final class FramesUITests: XCTestCase {
     }
 
     // MARK: Hilfen
+
+    /// Sperrt Stremio das Test-Konto bis zu einem neuen Passwort, ist das kein Fehler der App.
+    private func skipIfPasswordResetRequired(in app: XCUIApplication, loaded: Bool) throws {
+        guard !loaded else { return }
+        let notice = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'neues Passwort'")).firstMatch
+        if notice.exists {
+            print("FRAMES-UI Konto: Stremio verlangt ein neues Passwort, Test übersprungen.")
+            throw XCTSkip("Stremio verlangt für das Test-Konto ein neues Passwort. Danach FRAMES_PASSWORD aktualisieren.")
+        }
+    }
 
     private func time(in label: String) -> Int {
         guard let part = label.split(separator: " ").first(where: { $0.hasPrefix("zeit=") }) else { return -1 }

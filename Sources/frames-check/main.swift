@@ -59,6 +59,10 @@ if hasAccount, let email = environment["FRAMES_EMAIL"], let password = environme
         let session = try await api.login(email: email, password: password)
         authKey = session.authKey
         ok("Anmeldung angenommen, Sitzungsschlüssel erhalten")
+    } catch let error as FramesError where error.requiresPasswordReset {
+        // Kein Fehler von Frames: Stremio sperrt das Konto bis zum neuen Passwort. Weiter mit der Grundausstattung.
+        warn("Stremio verlangt für das Test-Konto ein neues Passwort. Danach das Secret FRAMES_PASSWORD aktualisieren. "
+            + "Geprüft wird bis dahin die Grundausstattung.")
     } catch {
         fail("Anmeldung: \(error.localizedDescription)")
     }

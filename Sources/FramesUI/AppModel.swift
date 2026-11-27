@@ -175,6 +175,9 @@ public final class AppModel {
     }
 
     private static func describe(_ error: Error) -> String {
+        if let error = error as? FramesError, error.requiresPasswordReset {
+            return "Stremio verlangt ein neues Passwort. Setze es auf stremio.com zurück und melde dich dann neu an."
+        }
         if case FramesError.api(let code, _) = error, code == 2 || code == 3 {
             return "E-Mail oder Passwort stimmen nicht."
         }

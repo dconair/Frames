@@ -236,6 +236,12 @@ final class XRayTests: XCTestCase {
         XCTAssertEqual(album.cover?.absoluteString, "https://coverartarchive.org/release-group/rg1/front-250")
     }
 
+    func testRecognizesStremioPasswordReset() {
+        let locked = FramesError.api(code: 7, message: "Your password needs to be reset due to security reasons. Please reset your password.")
+        XCTAssertTrue(locked.requiresPasswordReset)
+        XCTAssertFalse(FramesError.api(code: 2, message: "Wrong password").requiresPasswordReset)
+    }
+
     func testSpotifySearchLinkWithoutLogin() {
         let link = SpotifyClient.searchLink(title: "Baby Blue", artist: "Badfinger")
         XCTAssertEqual(link.absoluteString, "https://open.spotify.com/search/Baby%20Blue%20Badfinger")
