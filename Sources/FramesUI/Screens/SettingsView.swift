@@ -55,6 +55,8 @@ struct SettingsView: View {
 
                 SpotifySettings()
 
+                StartSettingsSection()
+
                 SignalEyebrow("Einstellungen // Konto")
                     .padding(.top, Signal.pt(40))
                     .padding(.bottom, Signal.pt(8))

@@ -364,6 +364,73 @@ final class FramesUITests: XCTestCase {
         #endif
     }
 
+    // MARK: Start-Animationen und App-Symbol
+
+    /// Startet die App einmal je Start-Animation und hält sie mit Bildschirmfotos fest. Die CI nimmt dazu ein Video auf.
+    func testStartanimationen() {
+        let styles = ["stapel", "filmstreifen", "auffaechern", "zeichnen", "blitz", "abtaster", "countdown", "huepfer"]
+        for style in styles {
+            let app = XCUIApplication()
+            app.launchArguments = ["-frames-gast", "-frames-start", style]
+            app.launch()
+            usleep(900_000)
+            snap("20-Start-\(style)-1")
+            usleep(900_000)
+            snap("20-Start-\(style)-2")
+            sleep(2)
+            print("FRAMES-UI Start-Animation \(style) gelaufen")
+            app.terminate()
+        }
+    }
+
+    /// Zeigt unter Einstellungen den Bereich „Start“ mit der Wahl der Animation und der App-Symbole.
+    func testStartEinstellungen() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-frames-gast"]
+        app.launch()
+        XCTAssertTrue(waitForContent(in: app, seconds: 60), "Home ist nicht erschienen.")
+        guard openSection("Einstellungen", in: app) else {
+            XCTFail("Einstellungen nicht erreicht")
+            return
+        }
+        sleep(2)
+        #if os(tvOS)
+        let remote = XCUIRemote.shared
+        for _ in 0..<9 {
+            remote.press(.down)
+            usleep(300_000)
+        }
+        #else
+        app.swipeUp()
+        app.swipeUp()
+        #endif
+        sleep(2)
+        snap("30-Einstellungen-Start-1")
+        let chip = app.buttons["BLITZ"].firstMatch
+        if chip.waitForExistence(timeout: 5) {
+            #if os(tvOS)
+            for _ in 0..<4 where !chip.hasFocus {
+                XCUIRemote.shared.press(.right)
+                usleep(300_000)
+            }
+            XCUIRemote.shared.press(.select)
+            #else
+            chip.tap()
+            #endif
+            sleep(2)
+            snap("31-Einstellungen-Start-Vorschau")
+            sleep(2)
+            snap("32-Einstellungen-Start-Vorschau")
+        } else {
+            note("Start-Einstellungen", texts(in: app))
+        }
+        #if !os(tvOS)
+        app.swipeUp()
+        sleep(1)
+        snap("33-Einstellungen-Symbole")
+        #endif
+    }
+
     // MARK: Hilfen
 
     /// Sperrt Stremio das Test-Konto bis zu einem neuen Passwort, ist das kein Fehler der App.

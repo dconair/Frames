@@ -19,7 +19,9 @@ Lauffähig von der Anmeldung bis zur Wiedergabe:
 - X-Ray im Player: beim Pausieren die ersten Gesichter, über die Taste X-RAY Besetzung mit Fotos und Rollen (bei Serien mit den Gaststars der Folge) und der Soundtrack des Titels. Songs mit Albumcover. Mit verbundenem Spotify-Konto legt ein Tipp den Song in die eigene Playlist „Frames“ (oder in die Lieblingssongs), ohne Spotify zu öffnen. Ohne Verbindung öffnet er Spotify, auf dem Apple TV per QR-Code
 - Wiedergabestand geht zurück ins Stremio-Konto, die Wiedergabe setzt dort fort, wo sie auf einem anderen Gerät endete
 
-Als Nächstes: Intro überspringen und nächste Folge, App-Icon, Verteilung über TestFlight.
+- Acht wechselnde Start-Animationen, wählbare App-Symbole und ein Top Shelf mit „Weiter ansehen“ auf dem Apple TV, siehe [docs/start-symbole-top-shelf.md](docs/start-symbole-top-shelf.md)
+
+Als Nächstes: Intro überspringen und nächste Folge, Verteilung über TestFlight.
 
 Den Player treibt [AetherEngine](https://github.com/superuser404notfound/AetherEngine) an (FFmpeg liest, VideoToolbox dekodiert, AVPlayer zeigt). Die Bedienung darüber ist die von Frames.
 

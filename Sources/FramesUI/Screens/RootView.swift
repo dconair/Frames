@@ -7,6 +7,7 @@ public struct RootView: View {
     @State private var model: AppModel
     /// Die Start-Animation liegt über allem, bis sie durchgelaufen ist.
     @State private var showsLaunch = TestHooks.video == nil
+    private let launchStyle = StartPreferences.styleForThisLaunch
 
     @MainActor
     public init() {
@@ -46,21 +47,24 @@ public struct RootView: View {
                 }
             }
             if showsLaunch {
-                LaunchAnimation()
+                LaunchAnimation(style: launchStyle)
                     .transition(.opacity)
                     .zIndex(1)
             }
         }
         .animation(Signal.Motion.sheet, value: model.phase)
+        .modifier(DeepLinkPresenter())
         .environment(model)
         .preferredColorScheme(.dark)
         .tint(Signal.Palette.lime)
         .task { await model.start() }
+        .task { await StartPreferences.shared.applyDockIcon() }
         .task {
-            try? await Task.sleep(for: .milliseconds(LaunchAnimation.duration))
+            try? await Task.sleep(for: .milliseconds(launchStyle.duration))
             withAnimation(.easeOut(duration: 0.4)) { showsLaunch = false }
         }
         .onChange(of: model.settings) { _, _ in model.saveSettings() }
+        .onOpenURL { model.open($0) }
     }
 }
 

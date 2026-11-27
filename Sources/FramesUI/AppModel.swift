@@ -1,6 +1,9 @@
 #if canImport(SwiftUI)
 import SwiftUI
 import FramesCore
+#if os(tvOS)
+import TVServices
+#endif
 
 /// Zustand der ganzen App: Anmeldung, Addons, Bibliothek, Einstellungen.
 @MainActor
@@ -20,6 +23,8 @@ public final class AppModel {
     /// Solange der Player läuft, gehört ihm der ganze Bildschirm: Seitenleiste und untere Leiste weichen.
     public var isPlayerActive = false
     public var settings: PlaybackSettings
+    /// Ein Titel, den ein Link von außen öffnen soll, etwa aus dem Top Shelf auf dem Apple TV.
+    var deepLink: DeepLinkTarget?
 
     public let content: ContentService
     private let api: StremioAPI
@@ -88,6 +93,7 @@ public final class AppModel {
         session = nil
         addons = []
         library = []
+        syncTopShelf()
         lastSync = nil
         phase = .loggedOut
         if let key {
@@ -108,6 +114,7 @@ public final class AppModel {
             async let loadedLibrary = Self.loadLibrary(api, authKey: key)
             addons = try await loadedAddons
             library = await loadedLibrary ?? library
+            syncTopShelf()
             lastSync = Date()
             errorMessage = nil
         } catch FramesError.api(let code, let message) where code == 1 {
@@ -134,6 +141,46 @@ public final class AppModel {
         } else {
             library.append(saved)
         }
+        syncTopShelf()
+    }
+
+    /// Öffnet, was ein Link wie `frames://detail?type=movie&id=tt123` meint.
+    public func open(_ url: URL) {
+        guard let target = DeepLinkTarget(url: url, library: library) else { return }
+        deepLink = target
+    }
+
+    // MARK: Top Shelf
+
+    #if os(tvOS)
+    private var topShelfBackgrounds: [String: URL] = [:]
+    private var topShelfTask: Task<Void, Never>?
+    #endif
+
+    /// Schreibt den Stand von „Weiter ansehen“ für die Top-Shelf-Erweiterung auf dem Apple TV.
+    /// Breite Bilder holt sie sich einmal je Titel bei den Addons. Auf den anderen Geräten tut das nichts.
+    private func syncTopShelf() {
+        #if os(tvOS)
+        topShelfTask?.cancel()
+        let library = library, addons = addons, content = content
+        var backgrounds = topShelfBackgrounds
+        topShelfTask = Task { [weak self] in
+            let wanted = TopShelfSnapshot.entries(from: library)
+            for entry in wanted where backgrounds[entry.id] == nil {
+                if Task.isCancelled { return }
+                if let meta = try? await content.meta(type: entry.type, id: entry.id, addons: addons),
+                   let background = meta.background {
+                    backgrounds[entry.id] = background
+                }
+            }
+            if Task.isCancelled { return }
+            self?.topShelfBackgrounds = backgrounds
+            let snapshot = TopShelfSnapshot(entries: TopShelfSnapshot.entries(from: library, backgrounds: backgrounds))
+            if snapshot.write() {
+                TVTopShelfContentProvider.topShelfContentDidChange()
+            }
+        }
+        #endif
     }
 
     /// Installiert ein Addon über seine Adresse im Stremio-Konto. Gibt den Namen zurück, wenn es geklappt hat.
