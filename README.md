@@ -16,6 +16,7 @@ Lauffähig von der Anmeldung bis zur Wiedergabe:
 - Eigener Player auf allen Geräten: MKV und praktisch jedes andere Format, Dolby Vision, HDR10+ und Atmos über die Wege des Systems, Tonspuren, Untertitel
 - Skip mit getrennt einstellbaren Intervallen für vor und zurück (5, 10, 20 Sekunden)
 - Bildvorschau beim Spulen, aus den schon geladenen Daten und ohne zweite Verbindung zum Debrid-Dienst
+- X-Ray im Player: beim Pausieren die ersten Gesichter, über die Taste X-RAY Besetzung mit Fotos und Rollen (bei Serien mit den Gaststars der Folge) und der Soundtrack des Titels. Songs öffnen in Spotify oder landen mit verbundenem Konto direkt in den Lieblingssongs, auf dem Apple TV per QR-Code
 - Wiedergabestand geht zurück ins Stremio-Konto, die Wiedergabe setzt dort fort, wo sie auf einem anderen Gerät endete
 
 Als Nächstes: Intro überspringen und nächste Folge, App-Icon, Verteilung über TestFlight.
@@ -55,6 +56,18 @@ swift test
 - „Simulator-Tests“ startet die App im iPhone- und im Apple-TV-Simulator, bedient sie, spielt ein Testvideo im Player und legt Bildschirmfotos als Paket am Lauf ab.
 
 Die Zugangsdaten liegen als Secrets `FRAMES_EMAIL` und `FRAMES_PASSWORD` im Repo. In Protokollen stehen weder Links noch Titel aus dem Konto.
+
+## X-Ray und Spotify
+
+Besetzung kommt von [TVmaze](https://www.tvmaze.com/api) (CC BY-SA), der Soundtrack von [MusicBrainz](https://musicbrainz.org). Beide ohne Schlüssel. Wer in genau dieser Szene spielt oder welcher Song gerade läuft, gibt es als freie Quelle nicht. Das X-Ray zeigt deshalb Besetzung und Soundtrack des Titels.
+
+Ohne Einrichtung öffnet ein Song die Suche in Spotify. Damit Songs mit einem Tipp in den eigenen Lieblingssongs landen:
+
+1. Auf [developer.spotify.com](https://developer.spotify.com/dashboard) eine App anlegen, API „Web API“. Spotify verlangt dafür ein Premium-Konto.
+2. Als Redirect-URI `http://127.0.0.1:43821/spotify` eintragen.
+3. Die Client-ID in Frames unter Einstellungen › X-Ray und Spotify einfügen und „Verbinden“ wählen.
+
+Frames nimmt den Rücksprung von Spotify kurz auf 127.0.0.1 an, der Code verlässt das Gerät nicht. Ein Geheimnis braucht die App dank PKCE nicht. Auf dem Apple TV gibt es keinen Browser für die Anmeldung, dort zeigt jeder Song einen QR-Code fürs Handy.
 
 ## Hinweise
 

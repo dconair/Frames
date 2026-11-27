@@ -90,6 +90,31 @@ jobs:
           name: filter-${{ matrix.platform }}
           path: filter
           if-no-files-found: ignore
+      # Läuft mit dem freien Testvideo als Folge einer bekannten Serie, zeigt also nichts aus dem Konto.
+      - name: X-Ray aufnehmen
+        run: |
+          mkdir -p xray
+          xcrun simctl io "$UDID" recordVideo --codec h264 --force "xray/xray-${{ matrix.platform }}.mp4" &
+          AUFNAHME=$!
+          sleep 3
+          xcodebuild test \
+            -project Frames.xcodeproj \
+            -scheme Frames \
+            -destination "id=$UDID" \
+            -only-testing:FramesUITests/FramesUITests/testXRay \
+            -resultBundlePath xray.xcresult \
+            -skipPackagePluginValidation 2>&1 \
+            | grep -E "FRAMES-UI|error:|Test Case|TEST (SUCCEEDED|FAILED)" || true
+          kill -INT $AUFNAHME
+          wait $AUFNAHME || true
+          xcrun xcresulttool export attachments --path xray.xcresult --output-path xray/bilder || true
+          ls -la xray xray/bilder || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: xray-${{ matrix.platform }}
+          path: xray
+          if-no-files-found: ignore
       - name: Vorschau mit dem Konto aufnehmen
         env:
           TEST_RUNNER_FRAMES_EMAIL: ${{ secrets.FRAMES_EMAIL }}

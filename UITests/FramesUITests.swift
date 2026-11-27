@@ -267,6 +267,100 @@ final class FramesUITests: XCTestCase {
         #endif
     }
 
+    // MARK: X-Ray
+
+    /// Das Testvideo tritt als Folge einer bekannten Serie auf. Pausieren zeigt die Gesichter,
+    /// die X-Ray-Taste öffnet Besetzung und Musik.
+    func testXRay() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-frames-gast", "-frames-xray"]
+        app.launchEnvironment = ["FRAMES_TEST_VIDEO": sampleMP4]
+        app.launch()
+
+        let status = app.descendants(matching: .any)["player-status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 30), "Der Player ist nicht erschienen.")
+        var hasPicture = false
+        for _ in 0..<60 where !hasPicture {
+            hasPicture = status.label.contains("bild=true")
+            if !hasPicture { sleep(1) }
+        }
+        sleep(4)
+
+        // Pause: über der Zeitleiste erscheinen die ersten Gesichter.
+        #if os(tvOS)
+        XCUIRemote.shared.press(.select)
+        #else
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap()
+        sleep(1)
+        let pause = app.buttons["PAUSE"]
+        if pause.exists { pause.tap() }
+        #endif
+        let teaser = app.descendants(matching: .any)["xray-teaser"]
+        print("FRAMES-UI X-Ray-Vorschau beim Pausieren: \(teaser.waitForExistence(timeout: 20))")
+        sleep(3)
+        snap("30-XRay-Pause")
+
+        let button = app.buttons["xray-button"]
+        XCTAssertTrue(button.waitForExistence(timeout: 20), "Die X-Ray-Taste fehlt.")
+        #if os(tvOS)
+        for _ in 0..<6 where !button.hasFocus {
+            XCUIRemote.shared.press(.down)
+            sleep(1)
+        }
+        XCUIRemote.shared.press(.select)
+        #else
+        if !button.isHittable {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap()
+            sleep(1)
+        }
+        button.tap()
+        #endif
+        sleep(4)
+        let names = app.staticTexts.allElementsBoundByIndex.prefix(30).map(\.label)
+        print("FRAMES-UI X-Ray Besetzung: \(names.joined(separator: " | "))")
+        XCTAssertTrue(names.contains("Bryan Cranston"), "Im X-Ray fehlt die Besetzung.")
+        snap("31-XRay-Besetzung")
+
+        #if os(tvOS)
+        for _ in 0..<5 {
+            XCUIRemote.shared.press(.down)
+            sleep(1)
+        }
+        snap("32-XRay-Besetzung-weiter")
+        for _ in 0..<8 {
+            XCUIRemote.shared.press(.up)
+        }
+        sleep(1)
+        XCUIRemote.shared.press(.right)
+        sleep(1)
+        XCUIRemote.shared.press(.select)
+        #else
+        app.swipeUp()
+        sleep(2)
+        snap("32-XRay-Besetzung-weiter")
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'MUSIK'")).firstMatch.tap()
+        #endif
+        let music = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Music From the Original Series'")).firstMatch
+        let hasMusic = music.waitForExistence(timeout: 30)
+        print("FRAMES-UI X-Ray Musik gefunden=\(hasMusic)")
+        XCTAssertTrue(hasMusic, "Im X-Ray fehlt der Soundtrack.")
+        sleep(3)
+        snap("33-XRay-Musik")
+
+        #if os(tvOS)
+        // Ein Song zeigt auf dem Fernseher den QR-Code für Spotify.
+        for _ in 0..<2 {
+            XCUIRemote.shared.press(.down)
+            sleep(1)
+        }
+        XCUIRemote.shared.press(.select)
+        sleep(3)
+        snap("34-XRay-QR")
+        XCUIRemote.shared.press(.menu)
+        sleep(2)
+        #endif
+    }
+
     // MARK: Hilfen
 
     private func time(in label: String) -> Int {

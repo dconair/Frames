@@ -269,6 +269,33 @@ if let best = ranked.first, let url = best.stream.playableURL {
     fail("Kein direkter Link für \(streamId). Liefert dein Debrid-Addon für diesen Titel Streams?")
 }
 
+// MARK: X-Ray
+
+// Feste, bekannte Titel, damit die Ausgabe nichts über das Konto verrät.
+step("X-Ray: Besetzung und Musik")
+let xraySeries = XRayRequest(metaId: "tt0903747", type: "series", name: "Breaking Bad", videoId: "tt0903747:2:3")
+let seriesCast = await CastService().cast(for: xraySeries)
+if seriesCast.count >= 5, seriesCast.contains(where: \.isGuest), seriesCast.contains(where: { $0.photo != nil }) {
+    ok("Serie: \(seriesCast.count) Personen, \(seriesCast.filter(\.isGuest).count) Gäste der Folge, z. B. \(seriesCast[0].name) als \(seriesCast[0].character ?? "?")")
+} else {
+    fail("Serie: Besetzung von TVmaze unvollständig (\(seriesCast.count) Personen)")
+}
+let xrayMovie = XRayRequest(
+    metaId: "tt15398776", type: "movie", name: "Oppenheimer", year: 2023,
+    castNames: ["Cillian Murphy", "Emily Blunt", "Matt Damon", "Robert Downey Jr."]
+)
+let movieCast = await CastService().cast(for: xrayMovie)
+let withPhotos = movieCast.filter { $0.photo != nil }.count
+if withPhotos >= 2 { ok("Film: \(withPhotos) von \(movieCast.count) Namen mit Foto") } else { fail("Film: nur \(withPhotos) Fotos gefunden") }
+for request in [xraySeries, xrayMovie] {
+    let albums = await SoundtrackService().soundtracks(for: request)
+    if let first = albums.first, let track = first.tracks.first {
+        ok("\(request.name): \(albums.count) Album/Alben, \(first.title) mit \(first.tracks.count) Stücken, z. B. „\(track.title)“ von \(track.artist)")
+    } else {
+        fail("\(request.name): kein Soundtrack bei MusicBrainz gefunden")
+    }
+}
+
 if failures == 0, warnings > 0 {
     print("\nFrames arbeitet richtig, aber am Konto ist etwas zu tun: \(warnings) Hinweis(e) oben.")
 } else {

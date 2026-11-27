@@ -38,6 +38,9 @@ struct PlaybackItem: Hashable {
     var subtitle: String?
     /// Laufzeit in Minuten, wenn das Addon sie nennt. Daraus schätzt die Quellenliste die Bitrate.
     var runtimeMinutes: Int? = nil
+    /// Erscheinungsjahr und Besetzung laut Addon. Damit findet das X-Ray im Player Soundtrack und Fotos.
+    var year: Int? = nil
+    var cast: [String] = []
 }
 
 struct StreamsRoute: Hashable {

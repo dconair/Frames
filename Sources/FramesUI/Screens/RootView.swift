@@ -30,10 +30,15 @@ public struct RootView: View {
             case .ready:
                 if let video = TestHooks.video {
                     NavigationStack {
-                        PlayerView(route: PlayerRoute(url: video, headers: [:], item: PlaybackItem(
-                            metaId: "frames-test", type: "movie", name: "Testvideo", poster: nil,
-                            videoId: "frames-test", subtitle: nil
-                        )))
+                        PlayerView(route: PlayerRoute(url: video, headers: [:], item: TestHooks.opensXRay
+                            ? PlaybackItem(
+                                metaId: "tt0903747", type: "series", name: "Breaking Bad", poster: nil,
+                                videoId: "tt0903747:2:3", subtitle: "S02 E03 · Bit by a Dead Bee", year: 2008
+                            )
+                            : PlaybackItem(
+                                metaId: "frames-test", type: "movie", name: "Testvideo", poster: nil,
+                                videoId: "frames-test", subtitle: nil
+                            )))
                     }
                 } else {
                     MainView()
