@@ -10,6 +10,12 @@ enum TestHooks {
     /// Ohne Konto starten, mit der Grundausstattung an Addons, die Stremio jedem neuen Konto gibt.
     static var isGuest: Bool { process.arguments.contains("-frames-gast") }
 
+    /// Erzwingt eine Start-Animation: `-frames-start blitz`.
+    static var launchStyle: LaunchStyle? {
+        guard let index = process.arguments.firstIndex(of: "-frames-start"), index + 1 < process.arguments.count else { return nil }
+        return LaunchStyle(rawValue: process.arguments[index + 1])
+    }
+
     /// Zugangsdaten, mit denen sich die App beim Start selbst anmeldet.
     static var login: (email: String, password: String)? {
         guard let email = process.environment["FRAMES_TEST_EMAIL"], !email.isEmpty,
@@ -48,6 +54,7 @@ enum TestHooks {
     }
     #else
     static let isGuest = false
+    static let launchStyle: LaunchStyle? = nil
     static let sampleStreams: [SourcedStream]? = nil
     static let login: (email: String, password: String)? = nil
     static let video: URL? = nil

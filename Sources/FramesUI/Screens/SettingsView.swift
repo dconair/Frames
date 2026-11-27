@@ -53,6 +53,8 @@ struct SettingsView: View {
                     SignalSegments(SignalTypeface.allCases.map { ($0, $0.label) }, selection: $appearance.typeface)
                 }
 
+                StartSettingsSection()
+
                 SignalEyebrow("Einstellungen // Konto")
                     .padding(.top, Signal.pt(40))
                     .padding(.bottom, Signal.pt(8))

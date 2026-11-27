@@ -20,9 +20,27 @@ targets:
     dependencies:
       - package: Frames
         product: FramesUI
+      # Top Shelf: gibt es nur auf dem Apple TV.
+      - target: FramesTopShelf
+        platformFilter: tvOS
+    # Das Linkschema frames:// öffnet die App, zum Beispiel aus dem Top Shelf.
+    info:
+      path: Config/Frames-Info.plist
+      properties:
+        CFBundleURLTypes:
+          - CFBundleURLName: app.frames.Frames
+            CFBundleURLSchemes: [frames]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.frames.Frames
+        # Wählbare App-Symbole auf iPhone und iPad. Auf dem Apple TV gibt es dafür keine Schnittstelle,
+        # dort liegt das feste Symbol samt Top-Shelf-Bild in einem eigenen Satz aus Schichtbildern.
+        "ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES[sdk=iphone*]": "Icon-einzelbilderLimette Icon-schraegstrich Icon-sucher Icon-balkenF Icon-zeitleiste Icon-kontaktbogen"
+        "ASSETCATALOG_COMPILER_APPICON_NAME[sdk=appletv*]": "App Icon & Top Shelf Image"
+        # Der gemeinsame Ordner mit der Top-Shelf-Erweiterung braucht ein bezahltes Developer-Konto.
+        # Im Simulator genügt die Angabe. Wer mit einem bezahlten Konto auf dem Gerät installiert,
+        # macht daraus eine Angabe ohne Bedingung, siehe docs/top-shelf.md.
+        "CODE_SIGN_ENTITLEMENTS[sdk=appletvsimulator*]": Config/Frames-tvOS.entitlements
         PRODUCT_NAME: Frames
         MARKETING_VERSION: 0.1.0
         CURRENT_PROJECT_VERSION: 1
@@ -41,6 +59,31 @@ targets:
         # Auf dem Mac liegt die Programmdatei in Contents/MacOS, die Frameworks in Contents/Frameworks.
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks"
         "LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]": "$(inherited) @executable_path/../Frameworks @loader_path/../Frameworks"
+  # Erweiterung für das Top Shelf des Apple TV: „Weiter ansehen“ über den App-Symbolen.
+  FramesTopShelf:
+    type: tv-app-extension
+    platform: tvOS
+    deploymentTarget: "18.0"
+    sources:
+      - TopShelf
+    dependencies:
+      - package: Frames
+        product: FramesCore
+    info:
+      path: Config/TopShelf-Info.plist
+      properties:
+        CFBundleDisplayName: Frames
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.tv-top-shelf
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ContentProvider
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.frames.Frames.TopShelf
+        PRODUCT_NAME: FramesTopShelf
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        SWIFT_VERSION: "5.0"
+        "CODE_SIGN_ENTITLEMENTS[sdk=appletvsimulator*]": Config/TopShelf.entitlements
   # Startet die App im Simulator und bedient sie. Läuft in der CI für iPhone und Apple TV.
   FramesUITests:
     type: bundle.ui-testing

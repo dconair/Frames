@@ -18,7 +18,9 @@ Lauffähig von der Anmeldung bis zur Wiedergabe:
 - Bildvorschau beim Spulen, aus den schon geladenen Daten und ohne zweite Verbindung zum Debrid-Dienst
 - Wiedergabestand geht zurück ins Stremio-Konto, die Wiedergabe setzt dort fort, wo sie auf einem anderen Gerät endete
 
-Als Nächstes: Intro überspringen und nächste Folge, App-Icon, Verteilung über TestFlight.
+- Acht wechselnde Start-Animationen, wählbare App-Symbole und ein Top Shelf mit „Weiter ansehen“ auf dem Apple TV, siehe [docs/start-symbole-top-shelf.md](docs/start-symbole-top-shelf.md)
+
+Als Nächstes: Intro überspringen und nächste Folge, Verteilung über TestFlight.
 
 Den Player treibt [AetherEngine](https://github.com/superuser404notfound/AetherEngine) an (FFmpeg liest, VideoToolbox dekodiert, AVPlayer zeigt). Die Bedienung darüber ist die von Frames.
 
