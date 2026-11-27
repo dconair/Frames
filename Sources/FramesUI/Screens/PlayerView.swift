@@ -63,7 +63,7 @@ private struct PlayerStage: View {
     }
 
     private enum FocusTarget: Hashable {
-        case surface, tracks
+        case surface, tracks, xray
     }
 
     var body: some View {
@@ -177,6 +177,14 @@ private struct PlayerStage: View {
             switch direction {
             case .left: skip(.backward)
             case .right: skip(.forward)
+            case .down:
+                // Die Fläche füllt den ganzen Bildschirm, darunter liegt für die Fokus-Steuerung nichts.
+                // Deshalb führt „runter“ ausdrücklich zur X-Ray-Taste, sonst zu Ton und Untertitel.
+                showControls()
+                Task { @MainActor in
+                    await Task.yield()
+                    focus = xray.isEmpty ? .tracks : .xray
+                }
             default: showControls()
             }
         }
@@ -278,6 +286,7 @@ private struct PlayerStage: View {
                 if !xray.isEmpty {
                     Button("X-RAY") { openXRay() }
                         .buttonStyle(SignalButtonStyle())
+                        .focused($focus, equals: .xray)
                         .accessibilityIdentifier("xray-button")
                 }
                 if session.audioTracks.count > 1 {

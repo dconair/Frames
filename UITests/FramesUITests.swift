@@ -303,10 +303,9 @@ final class FramesUITests: XCTestCase {
         let button = app.buttons["xray-button"]
         XCTAssertTrue(button.waitForExistence(timeout: 20), "Die X-Ray-Taste fehlt.")
         #if os(tvOS)
-        for _ in 0..<6 where !button.hasFocus {
-            XCUIRemote.shared.press(.down)
-            sleep(1)
-        }
+        XCUIRemote.shared.press(.down)
+        sleep(2)
+        print("FRAMES-UI Fokus vor X-Ray: \(focusedLabel(in: app))")
         XCUIRemote.shared.press(.select)
         #else
         if !button.isHittable {
@@ -315,10 +314,11 @@ final class FramesUITests: XCTestCase {
         }
         button.tap()
         #endif
-        sleep(4)
-        let names = app.staticTexts.allElementsBoundByIndex.prefix(30).map(\.label)
-        print("FRAMES-UI X-Ray Besetzung: \(names.joined(separator: " | "))")
-        XCTAssertTrue(names.contains("Bryan Cranston"), "Im X-Ray fehlt die Besetzung.")
+        let cranston = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Bryan Cranston'")).firstMatch
+        let hasCast = cranston.waitForExistence(timeout: 20)
+        sleep(2)
+        print("FRAMES-UI X-Ray Besetzung gefunden=\(hasCast)")
+        XCTAssertTrue(hasCast, "Im X-Ray fehlt die Besetzung.")
         snap("31-XRay-Besetzung")
 
         #if os(tvOS)
@@ -340,7 +340,7 @@ final class FramesUITests: XCTestCase {
         snap("32-XRay-Besetzung-weiter")
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'MUSIK'")).firstMatch.tap()
         #endif
-        let music = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Music From the Original Series'")).firstMatch
+        let music = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Music From the Original Series'")).firstMatch
         let hasMusic = music.waitForExistence(timeout: 30)
         print("FRAMES-UI X-Ray Musik gefunden=\(hasMusic)")
         XCTAssertTrue(hasMusic, "Im X-Ray fehlt der Soundtrack.")

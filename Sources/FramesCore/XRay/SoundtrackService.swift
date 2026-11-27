@@ -24,14 +24,15 @@ public struct SoundtrackService: Sendable {
         self.pause = pause
     }
 
-    /// Bis zu `limit` Alben mit ihren Stücken.
-    public func soundtracks(for request: XRayRequest, limit: Int = 2) async -> [XRaySoundtrack] {
+    /// Bis zu `limit` Alben mit ihren Stücken. Wirft, wenn MusicBrainz nicht antwortet,
+    /// damit die App „erneut versuchen“ anbieten kann statt „kein Soundtrack“ zu melden.
+    public func soundtracks(for request: XRayRequest, limit: Int = 2) async throws -> [XRaySoundtrack] {
         let query = "releasegroup:\"\(request.name.replacingOccurrences(of: "\"", with: ""))\" AND secondarytype:soundtrack"
-        guard let found: MBGroupSearch = await get("release-group", ["query": query, "limit": "15"]) else { return [] }
+        guard let found: MBGroupSearch = try await get("release-group", ["query": query, "limit": "15"]) else { return [] }
         let picked = Self.pick(found.groups, for: request).prefix(limit)
         var result = [XRaySoundtrack]()
         for group in picked {
-            let releases: MBReleaseBrowse? = await get(
+            let releases: MBReleaseBrowse? = try await get(
                 "release", ["release-group": group.id, "inc": "recordings+artist-credits", "status": "official", "limit": "1"]
             )
             let tracks = releases?.releases.first?.tracks ?? []
@@ -61,32 +62,48 @@ public struct SoundtrackService: Sendable {
         }.map(\.element)
     }
 
-    private func get<T: Decodable>(_ path: String, _ query: [String: String]) async -> T? {
+    /// nil heißt: MusicBrainz kennt das nicht. Ein Fehler heißt: keine Antwort.
+    private func get<T: Decodable>(_ path: String, _ query: [String: String]) async throws -> T? {
         var components = URLComponents(url: base.appendingPathComponent(path), resolvingAgainstBaseURL: false)
         components?.queryItems = (query.merging(["fmt": "json"]) { a, _ in a })
             .sorted { $0.key < $1.key }
             .map { URLQueryItem(name: $0.key, value: $0.value) }
         guard let url = components?.url else { return nil }
-        // MusicBrainz antwortet mit 503, wenn zwei Anfragen zu dicht aufeinander folgen. Einmal warten und nochmal.
-        for attempt in 0..<2 {
-            await Self.throttle.wait(pause * (attempt + 1))
-            guard let response = await send(url) else { return nil }
-            if response.status == 503 { continue }
-            guard (200..<300).contains(response.status) else { return nil }
-            return try? decodeJSON(T.self, from: response.data)
+        // MusicBrainz antwortet mit 503, wenn Anfragen zu dicht kommen, auch von anderen Geräten im selben Netz.
+        // Dann mit wachsendem Abstand bis zu viermal versuchen.
+        var lastError = FramesError.network("MusicBrainz antwortet nicht")
+        for attempt in 0..<4 {
+            await Self.throttle.wait(pause * (1 << attempt))
+            do {
+                let response = try await send(url)
+                if response.status == 503 || response.status == 429 {
+                    lastError = .http(response.status)
+                    continue
+                }
+                guard (200..<300).contains(response.status) else { return nil }
+                return try? decodeJSON(T.self, from: response.data)
+            } catch let error as FramesError {
+                lastError = error
+            }
         }
-        return nil
+        throw lastError
     }
 
     /// Hält alle Anfragen der App an MusicBrainz mindestens `pause` auseinander, auch über mehrere Player hinweg.
     static let throttle = Throttle()
 
-    private func send(_ url: URL) async -> HTTPResponse? {
+    private func send(_ url: URL) async throws -> HTTPResponse {
         var request = URLRequest(url: url)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
         request.timeoutInterval = 20
-        return try? await transport.send(request)
+        do {
+            return try await transport.send(request)
+        } catch let error as FramesError {
+            throw error
+        } catch {
+            throw FramesError.network(error.localizedDescription)
+        }
     }
 }
 

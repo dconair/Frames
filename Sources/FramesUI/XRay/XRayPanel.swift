@@ -40,7 +40,6 @@ struct XRayPanel: View {
                     }
                     .padding(Signal.pt(10))
                 }
-                .scrollClipDisabled()
                 .scrollIndicators(.hidden)
                 Button("SCHLIESSEN", action: onClose)
                     .buttonStyle(SignalButtonStyle())
@@ -48,7 +47,7 @@ struct XRayPanel: View {
             // Solange der QR-Code offen ist, gehört ihm der Fokus.
             .disabled(qrTrack != nil)
             .padding(Signal.pt(32))
-            .frame(width: max(330, Signal.pt(780)))
+            .frame(maxWidth: max(330, Signal.pt(780)))
             .frame(maxHeight: .infinity, alignment: .topLeading)
             .background(Signal.Palette.sidebar.ignoresSafeArea())
             .overlay(alignment: .leading) {
@@ -95,6 +94,12 @@ struct XRayPanel: View {
     private var musicList: some View {
         if model.musicPhase != .loaded {
             SignalNotice("Sucht Soundtrack", isLoading: true)
+        } else if model.musicFailed {
+            VStack(spacing: Signal.pt(12)) {
+                SignalNotice("MusicBrainz antwortet gerade nicht", detail: "Der Dienst lässt nur wenige Anfragen zu.")
+                Button("ERNEUT VERSUCHEN") { Task { await model.reloadMusic() } }
+                    .buttonStyle(SignalButtonStyle())
+            }
         } else if model.soundtracks.isEmpty {
             SignalNotice("Kein Soundtrack gefunden", detail: "MusicBrainz kennt zu diesem Titel kein Soundtrack-Album.")
         } else {
@@ -330,8 +335,23 @@ struct XRayTeaser: View {
         if model.castPhase == .loaded, !model.cast.isEmpty {
             VStack(alignment: .leading, spacing: Signal.pt(12)) {
                 SignalEyebrow(teaserTitle)
+                // Auf dem iPhone im Hochformat passen weniger Gesichter nebeneinander.
+                ViewThatFits(in: .horizontal) {
+                    faces(5)
+                    faces(4)
+                    faces(3)
+                }
+            }
+            .padding(Signal.pt(18))
+            .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .allowsHitTesting(false)
+            .accessibilityIdentifier("xray-teaser")
+        }
+    }
+
+    private func faces(_ count: Int) -> some View {
                 HStack(alignment: .top, spacing: Signal.pt(18)) {
-                    ForEach(model.cast.prefix(5)) { person in
+                    ForEach(model.cast.prefix(count)) { person in
                         VStack(spacing: Signal.pt(8)) {
                             Portrait(url: person.photo, name: person.name, size: max(40, Signal.pt(88)))
                             Text(person.name)
@@ -349,12 +369,6 @@ struct XRayTeaser: View {
                         .frame(width: max(64, Signal.pt(140)))
                     }
                 }
-            }
-            .padding(Signal.pt(18))
-            .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .allowsHitTesting(false)
-            .accessibilityIdentifier("xray-teaser")
-        }
     }
 
     private var teaserTitle: String {

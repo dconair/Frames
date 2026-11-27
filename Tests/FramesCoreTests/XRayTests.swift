@@ -93,7 +93,7 @@ final class XRayTests: XCTestCase {
         XCTAssertEqual(SoundtrackService.pick(remakes, for: movie).map(\.id), ["new"])
     }
 
-    func testLoadsTracksOfSoundtrack() async {
+    func testLoadsTracksOfSoundtrack() async throws {
         let mock = MockTransport()
         mock.on("release-group?", json: """
         {"release-groups": [{"id": "rg1", "title": "Oppenheimer: Original Motion Picture Soundtrack", "first-release-date": "2023-07-21"}]}
@@ -105,7 +105,7 @@ final class XRayTests: XCTestCase {
         ]}]}]}
         """)
         let service = SoundtrackService(transport: mock, pause: .zero)
-        let result = await service.soundtracks(for: XRayRequest(metaId: "tt15398776", type: "movie", name: "Oppenheimer", year: 2023))
+        let result = try await service.soundtracks(for: XRayRequest(metaId: "tt15398776", type: "movie", name: "Oppenheimer", year: 2023))
         XCTAssertEqual(result.count, 1)
         XCTAssertEqual(result[0].tracks.map(\.title), ["Fission", "Duet"])
         XCTAssertEqual(result[0].tracks[0].artist, "Ludwig Göransson")
@@ -113,6 +113,19 @@ final class XRayTests: XCTestCase {
         XCTAssertEqual(result[0].tracks[1].artist, "A & B")
         XCTAssertEqual(mock.requests.first?.value(forHTTPHeaderField: "User-Agent"), SoundtrackService.userAgent)
         XCTAssertTrue(mock.requests.first?.url?.absoluteString.contains("secondarytype") == true)
+    }
+
+    func testBusyMusicBrainzRetriesThenThrows() async {
+        let mock = MockTransport()
+        mock.on("release-group?", status: 503, json: "{}")
+        let service = SoundtrackService(transport: mock, pause: .zero)
+        do {
+            _ = try await service.soundtracks(for: XRayRequest(metaId: "tt1", type: "movie", name: "X"))
+            XCTFail("Ohne Antwort darf es nicht „kein Soundtrack“ heißen.")
+        } catch {
+            XCTAssertEqual(error as? FramesError, .http(503))
+        }
+        XCTAssertEqual(mock.requests.count, 4)
     }
 
     // MARK: Spotify

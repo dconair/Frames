@@ -288,7 +288,7 @@ let movieCast = await CastService().cast(for: xrayMovie)
 let withPhotos = movieCast.filter { $0.photo != nil }.count
 if withPhotos >= 2 { ok("Film: \(withPhotos) von \(movieCast.count) Namen mit Foto") } else { fail("Film: nur \(withPhotos) Fotos gefunden") }
 for request in [xraySeries, xrayMovie] {
-    let albums = await SoundtrackService().soundtracks(for: request)
+    let albums = (try? await SoundtrackService().soundtracks(for: request)) ?? []
     if let first = albums.first, let track = first.tracks.first {
         ok("\(request.name): \(albums.count) Album/Alben, \(first.title) mit \(first.tracks.count) Stücken, z. B. „\(track.title)“ von \(track.artist)")
     } else {

@@ -92,6 +92,8 @@ jobs:
           if-no-files-found: ignore
       # Läuft mit dem freien Testvideo als Folge einer bekannten Serie, zeigt also nichts aus dem Konto.
       - name: X-Ray aufnehmen
+        # Braucht kein Konto und läuft deshalb auch, wenn ein Test mit Konto vorher gescheitert ist.
+        if: success() || failure()
         run: |
           mkdir -p xray
           xcrun simctl io "$UDID" recordVideo --codec h264 --force "xray/xray-${{ matrix.platform }}.mp4" &
