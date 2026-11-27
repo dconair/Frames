@@ -369,7 +369,7 @@ final class FramesUITests: XCTestCase {
     /// Sperrt Stremio das Test-Konto bis zu einem neuen Passwort, ist das kein Fehler der App.
     private func skipIfPasswordResetRequired(in app: XCUIApplication, loaded: Bool) throws {
         guard !loaded else { return }
-        let notice = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'neues Passwort'")).firstMatch
+        let notice = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] 'neues Passwort'")).firstMatch
         if notice.exists {
             print("FRAMES-UI Konto: Stremio verlangt ein neues Passwort, Test übersprungen.")
             throw XCTSkip("Stremio verlangt für das Test-Konto ein neues Passwort. Danach FRAMES_PASSWORD aktualisieren.")
