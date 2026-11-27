@@ -31,7 +31,6 @@ public struct SoundtrackService: Sendable {
         let picked = Self.pick(found.groups, for: request).prefix(limit)
         var result = [XRaySoundtrack]()
         for group in picked {
-            try? await Task.sleep(for: pause)
             let releases: MBReleaseBrowse? = await get(
                 "release", ["release-group": group.id, "inc": "recordings+artist-credits", "status": "official", "limit": "1"]
             )
@@ -68,12 +67,38 @@ public struct SoundtrackService: Sendable {
             .sorted { $0.key < $1.key }
             .map { URLQueryItem(name: $0.key, value: $0.value) }
         guard let url = components?.url else { return nil }
+        // MusicBrainz antwortet mit 503, wenn zwei Anfragen zu dicht aufeinander folgen. Einmal warten und nochmal.
+        for attempt in 0..<2 {
+            await Self.throttle.wait(pause * (attempt + 1))
+            guard let response = await send(url) else { return nil }
+            if response.status == 503 { continue }
+            guard (200..<300).contains(response.status) else { return nil }
+            return try? decodeJSON(T.self, from: response.data)
+        }
+        return nil
+    }
+
+    /// Hält alle Anfragen der App an MusicBrainz mindestens `pause` auseinander, auch über mehrere Player hinweg.
+    static let throttle = Throttle()
+
+    private func send(_ url: URL) async -> HTTPResponse? {
         var request = URLRequest(url: url)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
         request.timeoutInterval = 20
-        guard let response = try? await transport.send(request), (200..<300).contains(response.status) else { return nil }
-        return try? decodeJSON(T.self, from: response.data)
+        return try? await transport.send(request)
+    }
+}
+
+/// Reiht Anfragen mit festem Mindestabstand auf.
+actor Throttle {
+    private var next = ContinuousClock.now
+
+    func wait(_ gap: Duration) async {
+        let now = ContinuousClock.now
+        let start = max(now, next)
+        next = start + gap
+        if start > now { try? await Task.sleep(until: start, clock: .continuous) }
     }
 }
 
