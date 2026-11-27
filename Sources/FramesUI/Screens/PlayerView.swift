@@ -494,6 +494,10 @@ private struct PlayerStage: View {
                     switch direction {
                     case .left: skip(.backward)
                     case .right: skip(.forward)
+                    case .down:
+                        // Wie auf der Bildfläche: runter führt zu den Tasten unten.
+                        showControls()
+                        focusSoon(flow.isSeries ? .episodes : .tracks)
                     default:
                         focus = .surface
                         showControls()
@@ -523,7 +527,8 @@ private struct PlayerStage: View {
             try? await Task.sleep(for: .seconds(4))
             guard !Task.isCancelled, session.isPlaying, panel == nil, session.scrubTime == nil else { return }
             controlsVisible = false
-            focus = .surface
+            // Taste und Karte bleiben stehen, wenn die Bedienung verschwindet, ihr Fokus also auch.
+            if focus != .segmentSkip, focus != .nextEpisode { focus = .surface }
         }
     }
 }
