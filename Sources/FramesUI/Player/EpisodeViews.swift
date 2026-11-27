@@ -239,7 +239,7 @@ struct EpisodesPanel: View {
                 }
                 .padding(Signal.pt(10))
             }
-            .scrollClipDisabled()
+            // Die Liste schneidet unten ab, sonst läuft sie unter „Schließen“ durch.
             .onAppear {
                 if let id = flow.currentVideoId { proxy.scrollTo(id, anchor: .center) }
             }
