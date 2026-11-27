@@ -196,7 +196,7 @@ struct EpisodesPanel: View {
                     .buttonStyle(SignalButtonStyle())
             }
             .padding(Signal.pt(32))
-            .frame(width: max(320, Signal.pt(820)))
+            .frame(maxWidth: max(320, Signal.pt(820)))
             .frame(maxHeight: .infinity, alignment: .topLeading)
             .background(Signal.Palette.sidebar.ignoresSafeArea())
             .overlay(alignment: .leading) {
