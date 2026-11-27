@@ -30,9 +30,9 @@ enum TestHooks {
     static var sampleSegments: MediaSegments? {
         guard playsEpisodes else { return nil }
         return MediaSegments([
-            MediaSegment(kind: .recap, start: 1, end: 6, source: .test),
-            MediaSegment(kind: .intro, start: 9, end: 17, source: .test),
-            MediaSegment(kind: .credits, start: 34, end: nil, source: .test),
+            MediaSegment(kind: .recap, start: 1, end: 10, source: .test),
+            MediaSegment(kind: .intro, start: 14, end: 24, source: .test),
+            MediaSegment(kind: .credits, start: 36, end: nil, source: .test),
         ])
     }
 

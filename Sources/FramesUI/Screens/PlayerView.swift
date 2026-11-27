@@ -155,7 +155,8 @@ private struct PlayerStage: View {
         #if os(tvOS)
         // Erscheint „Intro überspringen“ oder die Karte zur nächsten Folge, liegt der Fokus darauf wie bei Netflix.
         .onChange(of: flow.activeSkip) { _, segment in
-            if segment != nil, panel == nil, !controlsVisible || focus == .surface {
+            // Die Taste bekommt den Fokus auch bei eingeblendeter Bedienung, sonst pausiert „Auswählen“ nur.
+            if segment != nil, panel == nil, focus != .nextEpisode {
                 focusSoon(.segmentSkip)
             } else if segment == nil, focus == .segmentSkip {
                 focus = .surface

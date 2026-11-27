@@ -344,8 +344,13 @@ final class FramesUITests: XCTestCase {
         for _ in 0..<10 where !focusedLabel(in: app).contains("ÜBERSPRINGEN") {
             usleep(300_000)
         }
-        print("FRAMES-UI Folgen Fokus: \(focusedLabel(in: app))")
-        XCUIRemote.shared.press(.select)
+        let focused = focusedLabel(in: app)
+        print("FRAMES-UI Folgen Fokus: \(focused)")
+        if focused.contains("ÜBERSPRINGEN") {
+            XCUIRemote.shared.press(.select)
+        } else {
+            print("FRAMES-UI Folgen: Taste ohne Fokus, nichts gedrückt")
+        }
         #else
         let button = app.buttons["segment-skip"]
         if button.waitForExistence(timeout: 3) { button.tap() }
