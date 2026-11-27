@@ -22,6 +22,29 @@ enum TestHooks {
         process.environment["FRAMES_TEST_VIDEO"].flatMap(URL.init(string:))
     }
 
+    /// Der Testfilm tritt als erste Folge einer bekannten Serie auf, mit festen Zeitmarken für Rückblick,
+    /// Intro und Abspann. So lassen sich Überspringen, Countdown und Folgenliste ohne Konto zeigen.
+    static var playsEpisodes: Bool { process.arguments.contains("-frames-folgen") }
+
+    /// Zeitmarken passend zum etwa 52 Sekunden langen Testfilm.
+    static var sampleSegments: MediaSegments? {
+        guard playsEpisodes else { return nil }
+        return MediaSegments([
+            MediaSegment(kind: .recap, start: 1, end: 6, source: .test),
+            MediaSegment(kind: .intro, start: 9, end: 17, source: .test),
+            MediaSegment(kind: .credits, start: 34, end: nil, source: .test),
+        ])
+    }
+
+    /// Jede Folge spielt im Test wieder den freien Testfilm.
+    static var episodeStreams: [SourcedStream]? {
+        guard playsEpisodes, let video else { return nil }
+        return [SourcedStream(
+            stream: FramesCore.Stream(url: video, name: "[RD+] Test 1080p", title: "Serie.S01E02.1080p.WEB-DL.mkv", bingeGroup: "test|1080p"),
+            addonName: "Test", index: 0
+        )]
+    }
+
     /// Eine feste Quellenliste statt der Antworten der Addons, damit sich Sortierung und Filter ohne Konto zeigen lassen.
     /// Jede Zeile spielt dasselbe frei verfügbare Testvideo.
     static var sampleStreams: [SourcedStream]? {
@@ -51,6 +74,9 @@ enum TestHooks {
     static let sampleStreams: [SourcedStream]? = nil
     static let login: (email: String, password: String)? = nil
     static let video: URL? = nil
+    static let playsEpisodes = false
+    static let sampleSegments: MediaSegments? = nil
+    static let episodeStreams: [SourcedStream]? = nil
     #endif
 }
 #endif

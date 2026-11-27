@@ -50,6 +50,8 @@ final class PlayerSession {
     private(set) var scrubTime: Double?
     private(set) var scrubImage: CGImage?
     private(set) var flash: String?
+    /// Kapitel der Datei. Heißen sie „Intro“ oder „Abspann“, dienen sie als Zeitmarken zum Überspringen.
+    private(set) var chapters: [MediaSegments.Chapter] = []
 
     @ObservationIgnored private var cancellables = Set<AnyCancellable>()
     @ObservationIgnored private var cues: [SubtitleCue] = []
@@ -87,6 +89,12 @@ final class PlayerSession {
         engine.clock.$sourceTime
             .sink { [weak self] value in self?.updateSubtitle(at: value) }
             .store(in: &cancellables)
+        engine.$mediaChapters
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] chapters in
+                self?.chapters = chapters.map { .init(name: $0.name, start: $0.startSeconds, duration: $0.durationSeconds) }
+            }
+            .store(in: &cancellables)
         engine.$subtitleCues
             .sink { [weak self] cues in
                 guard let self else { return }
@@ -122,6 +130,11 @@ final class PlayerSession {
     func start(_ route: PlayerRoute, settings: PlaybackSettings, resumeAt: Double?) async {
         failure = nil
         hasEnded = false
+        isBusy = true
+        time = resumeAt ?? 0
+        scrubTime = nil
+        scrubImage = nil
+        chapters = []
         // Webtor leitet erst beim Abspielen zur Datei weiter. Was es ablehnt, wird hier zum Hinweis.
         let url: URL
         switch await StreamLinkResolver().resolve(route.url, headers: route.headers) {
@@ -225,7 +238,17 @@ final class PlayerSession {
         }
     }
 
-    private func showFlash(_ text: String) {
+    /// Springt ohne Vorschau direkt an eine Stelle, etwa ans Ende des Intros.
+    func jump(to target: Double, flash text: String? = nil) {
+        commitTask?.cancel()
+        let upper = duration > 0 ? duration : target
+        let clamped = min(max(0, target), upper)
+        if let text { showFlash(text) }
+        scrubTime = clamped
+        commitScrub()
+    }
+
+    func showFlash(_ text: String) {
         flashTask?.cancel()
         withAnimation(Signal.Motion.press) { flash = text }
         flashTask = Task { [weak self] in
