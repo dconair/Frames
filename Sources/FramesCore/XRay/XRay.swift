@@ -103,6 +103,11 @@ public struct XRaySoundtrack: Sendable, Hashable, Identifiable {
         self.isScore = isScore
         self.tracks = tracks
     }
+
+    /// Cover des Albums aus dem Cover Art Archive. Fehlt dort eins, antwortet die Adresse mit 404.
+    public var cover: URL? {
+        URL(string: "https://coverartarchive.org/release-group/\(id)/front-250")
+    }
 }
 
 /// Vergleicht Namen ohne Groß- und Kleinschreibung, Akzente und Satzzeichen.

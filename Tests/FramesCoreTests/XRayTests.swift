@@ -159,7 +159,10 @@ final class XRayTests: XCTestCase {
         {"tracks": {"items": [
           {"uri": "spotify:track:other", "name": "Something Else", "artists": [{"name": "X"}]},
           {"uri": "spotify:track:abc", "name": "Fission", "artists": [{"name": "Ludwig Göransson"}],
-           "external_urls": {"spotify": "https://open.spotify.com/track/abc"}}
+           "external_urls": {"spotify": "https://open.spotify.com/track/abc"},
+           "album": {"name": "Oppenheimer (Original Motion Picture Soundtrack)", "images": [
+             {"url": "https://i.scdn.co/640.jpg", "width": 640}, {"url": "https://i.scdn.co/300.jpg", "width": 300},
+             {"url": "https://i.scdn.co/64.jpg", "width": 64}]}}
         ]}}
         """)
         mock.on("me/library", json: "")
@@ -167,6 +170,8 @@ final class XRayTests: XCTestCase {
         let token = SpotifyToken(accessToken: "tok", refreshToken: "ref", expiresAt: Date().addingTimeInterval(3600))
         let track = try await client.findTrack(title: "Fission (Remastered)", artist: "Ludwig Göransson", token: token)
         XCTAssertEqual(track?.uri, "spotify:track:abc")
+        XCTAssertEqual(track?.cover?.absoluteString, "https://i.scdn.co/300.jpg")
+        XCTAssertEqual(track?.album, "Oppenheimer (Original Motion Picture Soundtrack)")
         try await client.save(uris: ["spotify:track:abc"], token: token)
 
         let save = try XCTUnwrap(mock.requests.last)
@@ -195,6 +200,40 @@ final class XRayTests: XCTestCase {
         } catch {
             XCTAssertEqual(error as? FramesError, .notLoggedIn)
         }
+    }
+
+    func testFramesPlaylistIsCreatedAndFilled() async throws {
+        let mock = MockTransport()
+        mock.on("me/playlists", status: 201, json: #"{"id": "pl1", "name": "Frames"}"#)
+        mock.on("playlists/gone/items", status: 404, json: "{}")
+        mock.on("playlists/pl1/items", status: 201, json: #"{"snapshot_id": "s"}"#)
+        let client = SpotifyClient(clientId: "0123456789abcdef0123456789abcdef", transport: mock)
+        let token = SpotifyToken(accessToken: "tok", refreshToken: nil, expiresAt: Date().addingTimeInterval(3600))
+
+        let id = try await client.createPlaylist(token: token)
+        XCTAssertEqual(id, "pl1")
+        let create = try XCTUnwrap(mock.requests.first)
+        XCTAssertEqual(create.httpMethod, "POST")
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(create.httpBody)) as? [String: Any])
+        XCTAssertEqual(body["name"] as? String, "Frames")
+        XCTAssertEqual(body["public"] as? Bool, false)
+
+        try await client.add(uris: ["spotify:track:abc"], toPlaylist: "pl1", token: token)
+        let add = try XCTUnwrap(mock.requests.last)
+        let addBody = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(add.httpBody)) as? [String: Any])
+        XCTAssertEqual(addBody["uris"] as? [String], ["spotify:track:abc"])
+
+        do {
+            try await client.add(uris: ["spotify:track:abc"], toPlaylist: "gone", token: token)
+            XCTFail("Eine gelöschte Playlist muss erkannt werden.")
+        } catch {
+            XCTAssertEqual(error as? SpotifyError, .playlistMissing)
+        }
+    }
+
+    func testSoundtrackCoverFromCoverArtArchive() {
+        let album = XRaySoundtrack(id: "rg1", title: "X")
+        XCTAssertEqual(album.cover?.absoluteString, "https://coverartarchive.org/release-group/rg1/front-250")
     }
 
     func testSpotifySearchLinkWithoutLogin() {

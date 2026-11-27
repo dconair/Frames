@@ -26,11 +26,26 @@ final class SpotifyAccount {
     }
 
     private static let clientIdKey = "frames.spotify.clientId"
+    private static let destinationKey = "frames.spotify.destination"
+    private static let playlistKey = "frames.spotify.playlistId"
     private let keychain = KeychainSlot(service: "app.frames.spotify", account: "token")
 
     var clientId: String {
         didSet { UserDefaults.standard.set(clientId, forKey: Self.clientIdKey) }
     }
+
+    /// Playlist „Frames“ oder Lieblingssongs.
+    var destination: SpotifyDestination {
+        didSet { UserDefaults.standard.set(destination.rawValue, forKey: Self.destinationKey) }
+    }
+
+    private var playlistId: String? {
+        didSet { UserDefaults.standard.set(playlistId, forKey: Self.playlistKey) }
+    }
+
+    /// Treffer bei Spotify je Song aus dem X-Ray, mit dem Cover des Originalalbums.
+    private(set) var matches: [String: SpotifyTrack] = [:]
+    private var lookedUp: Set<String> = []
 
     private(set) var token: SpotifyToken?
     private(set) var isConnecting = false
@@ -51,6 +66,8 @@ final class SpotifyAccount {
 
     private init() {
         clientId = UserDefaults.standard.string(forKey: Self.clientIdKey) ?? ""
+        destination = UserDefaults.standard.string(forKey: Self.destinationKey).flatMap(SpotifyDestination.init(rawValue:)) ?? .playlist
+        playlistId = UserDefaults.standard.string(forKey: Self.playlistKey)
         token = keychain.load().flatMap { try? JSONDecoder().decode(SpotifyToken.self, from: $0) }
     }
 
@@ -59,6 +76,28 @@ final class SpotifyAccount {
     func disconnect() {
         store(nil)
         states = [:]
+        matches = [:]
+        lookedUp = []
+        playlistId = nil
+    }
+
+    /// Sucht den Song bei Spotify, sobald seine Zeile erscheint, damit das Cover des Originalalbums zu sehen ist.
+    func lookUp(_ track: XRayTrack) async {
+        guard isConnected, lookedUp.insert(track.id).inserted else { return }
+        if let found = try? await find(track) { matches[track.id] = found }
+    }
+
+    private func find(_ track: XRayTrack) async throws -> SpotifyTrack? {
+        if let known = matches[track.id] { return known }
+        var current = try await freshToken()
+        do {
+            return try await client.findTrack(title: track.title, artist: track.artist, token: current)
+        } catch FramesError.notLoggedIn {
+            // Der Zugang ist abgelaufen, bevor die Uhr es wusste. Einmal erneuern und nochmal.
+            current = try await client.refresh(current)
+            store(current)
+            return try await client.findTrack(title: track.title, artist: track.artist, token: current)
+        }
     }
 
     #if !os(tvOS)
@@ -97,26 +136,23 @@ final class SpotifyAccount {
     }
     #endif
 
-    /// Sucht den Song bei Spotify und legt ihn in „Lieblingssongs“.
+    /// Legt den Song in die Playlist „Frames“ oder in die Lieblingssongs, ohne Spotify zu öffnen.
     func save(_ track: XRayTrack) async {
         guard states[track.id] != .saving else { return }
         states[track.id] = .saving
         do {
-            var current = try await freshToken()
-            var found: SpotifyTrack?
-            do {
-                found = try await client.findTrack(title: track.title, artist: track.artist, token: current)
-            } catch FramesError.notLoggedIn {
-                // Der Zugang ist abgelaufen, bevor die Uhr es wusste. Einmal erneuern und nochmal.
-                current = try await client.refresh(current)
-                store(current)
-                found = try await client.findTrack(title: track.title, artist: track.artist, token: current)
-            }
-            guard let found else {
+            guard let found = try await find(track) else {
                 states[track.id] = .notFound
                 return
             }
-            try await client.save(uris: [found.uri], token: current)
+            matches[track.id] = found
+            let current = try await freshToken()
+            switch destination {
+            case .liked:
+                try await client.save(uris: [found.uri], token: current)
+            case .playlist:
+                try await addToFramesPlaylist(found.uri, token: current)
+            }
             states[track.id] = .saved
         } catch FramesError.notLoggedIn {
             disconnect()
@@ -124,6 +160,21 @@ final class SpotifyAccount {
         } catch {
             states[track.id] = .failed((error as? LocalizedError)?.errorDescription ?? "Speichern fehlgeschlagen.")
         }
+    }
+
+    /// Legt die Playlist beim ersten Song an. Hat man sie in Spotify gelöscht, entsteht sie neu.
+    private func addToFramesPlaylist(_ uri: String, token: SpotifyToken) async throws {
+        if let playlistId {
+            do {
+                try await client.add(uris: [uri], toPlaylist: playlistId, token: token)
+                return
+            } catch SpotifyError.playlistMissing {
+                self.playlistId = nil
+            }
+        }
+        let created = try await client.createPlaylist(token: token)
+        playlistId = created
+        try await client.add(uris: [uri], toPlaylist: created, token: token)
     }
 
     private func freshToken() async throws -> SpotifyToken {

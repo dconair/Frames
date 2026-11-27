@@ -104,9 +104,15 @@ private struct SpotifySettings: View {
         }
         #else
         if spotify.isConnected {
-            SettingRow("Spotify", detail: "Verbunden. Songs aus dem X-Ray landen in deinen Lieblingssongs.") {
+            SettingRow("Spotify", detail: "Verbunden. Ein Tipp im X-Ray legt den Song ab, Spotify bleibt zu.") {
                 Button("TRENNEN") { spotify.disconnect() }
                     .buttonStyle(SignalButtonStyle())
+            }
+            SettingRow("Songs landen in", detail: "Die Playlist „Frames“ entsteht beim ersten Song, wie bei Shazam") {
+                SignalSegments(
+                    [(SpotifyDestination.playlist, "PLAYLIST FRAMES"), (SpotifyDestination.liked, "LIEBLINGSSONGS")],
+                    selection: $spotify.destination
+                )
             }
         } else {
             SettingRow("Spotify-Client-ID", detail: "Aus deiner App auf developer.spotify.com") {

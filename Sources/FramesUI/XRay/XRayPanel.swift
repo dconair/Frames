@@ -105,17 +105,30 @@ struct XRayPanel: View {
         } else {
             spotifyHint
             ForEach(model.soundtracks) { album in
-                HStack(spacing: Signal.pt(10)) {
-                    Text(album.title)
-                        .font(.signal(22, .semibold))
-                        .foregroundStyle(Signal.Palette.text)
-                        .lineLimit(2)
-                    if album.isScore { SignalBadge("Score", kind: .audio) }
-                    if let year = album.year { SignalBadge(String(year)) }
+                HStack(spacing: Signal.pt(16)) {
+                    Cover(url: album.cover, size: max(56, Signal.pt(110)))
+                    VStack(alignment: .leading, spacing: Signal.pt(8)) {
+                        Text(album.title)
+                            .font(.signal(22, .semibold))
+                            .foregroundStyle(Signal.Palette.text)
+                            .lineLimit(2)
+                        HStack(spacing: Signal.pt(8)) {
+                            if album.isScore { SignalBadge("Score", kind: .audio) }
+                            if let year = album.year { SignalBadge(String(year)) }
+                            SignalBadge("\(album.tracks.count) Songs")
+                        }
+                    }
                 }
                 .padding(.top, Signal.pt(14))
                 ForEach(album.tracks) { track in
-                    TrackRow(track: track, state: spotify.states[track.id], action: { act(on: track) })
+                    TrackRow(
+                        track: track,
+                        // Mit Spotify-Verbindung das Cover des Albums, auf dem der Song ursprünglich erschien.
+                        cover: spotify.matches[track.id]?.cover ?? album.cover,
+                        state: spotify.states[track.id],
+                        action: { act(on: track) }
+                    )
+                    .task { await spotify.lookUp(track) }
                 }
             }
             Text("SOUNDTRACK DES TITELS, NICHT DER SZENE · MUSICBRAINZ.ORG")
@@ -129,8 +142,12 @@ struct XRayPanel: View {
     private var spotifyHint: some View {
         let text: String = {
             if !SpotifyAccount.supportsLogin { return "Song wählen, QR-Code mit dem Handy scannen, in Spotify öffnen." }
-            if spotify.isConnected { return "Song wählen: er landet in deinen Spotify-Lieblingssongs." }
-            return "Song wählen: er öffnet in Spotify. Mit Spotify verbunden (Einstellungen) landet er direkt in deinen Lieblingssongs."
+            if spotify.isConnected {
+                return spotify.destination == .playlist
+                    ? "Song wählen: er landet in deiner Spotify-Playlist „Frames“."
+                    : "Song wählen: er landet in deinen Spotify-Lieblingssongs."
+            }
+            return "Mit Spotify verbinden (Einstellungen), dann landet ein Song mit einem Tipp in deiner Playlist „Frames“. Ohne Verbindung öffnet er Spotify."
         }()
         Text(text.uppercased())
             .font(.signalMono(14))
@@ -216,12 +233,14 @@ private struct PersonRow: View {
 
 private struct TrackRow: View {
     let track: XRayTrack
+    let cover: URL?
     let state: SpotifyAccount.SaveState?
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: Signal.pt(16)) {
+                Cover(url: cover, size: max(40, Signal.pt(68)))
                 VStack(alignment: .leading, spacing: Signal.pt(4)) {
                     Text(track.title)
                         .font(.signal(22, .medium))
@@ -240,9 +259,9 @@ private struct TrackRow: View {
                 Spacer(minLength: 0)
                 status
             }
-            .padding(.horizontal, Signal.pt(16))
-            .padding(.vertical, Signal.pt(12))
-            .frame(maxWidth: .infinity, minHeight: max(44, Signal.pt(72)), alignment: .leading)
+            .padding(.horizontal, Signal.pt(12))
+            .padding(.vertical, Signal.pt(10))
+            .frame(maxWidth: .infinity, minHeight: max(52, Signal.pt(88)), alignment: .leading)
             .signalPanel(active: state == .saved)
         }
         .buttonStyle(SignalCardButtonStyle(radius: 8, grows: false))
@@ -255,7 +274,7 @@ private struct TrackRow: View {
         case .saving:
             ProgressView().tint(Signal.Palette.lime)
         case .saved:
-            SignalBadge("✓ Gespeichert", kind: .resolution)
+            SignalBadge(SpotifyAccount.shared.destination == .playlist ? "✓ In Frames" : "✓ Gespeichert", kind: .resolution)
         case .notFound:
             SignalBadge("Nicht bei Spotify")
         default:
@@ -265,7 +284,34 @@ private struct TrackRow: View {
 
     private var label: String {
         if !SpotifyAccount.supportsLogin { return "QR · Spotify" }
-        return SpotifyAccount.shared.isConnected ? "+ Spotify" : "↗ Spotify"
+        let spotify = SpotifyAccount.shared
+        guard spotify.isConnected else { return "↗ Spotify" }
+        return spotify.destination == .playlist ? "+ Frames" : "+ Lieblingssongs"
+    }
+}
+
+/// Quadratisches Albumcover mit Notenzeichen, solange keins da ist.
+struct Cover: View {
+    let url: URL?
+    let size: CGFloat
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Signal.Palette.panelActive)
+            Text("♪")
+                .font(.signal(size * 0.4 / Signal.scale, .bold))
+                .foregroundStyle(Signal.Palette.textMuted)
+            if let url {
+                AsyncImage(url: url) { phase in
+                    if let image = phase.image {
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    }
+                }
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: 4, style: .continuous).stroke(Signal.Palette.border, lineWidth: 1) }
     }
 }
 

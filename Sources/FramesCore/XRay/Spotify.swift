@@ -28,12 +28,24 @@ public struct SpotifyTrack: Sendable, Hashable {
     public var name: String
     public var artist: String
     public var link: URL?
+    /// Name und Cover des Albums, auf dem der Song ursprünglich erschien.
+    public var album: String?
+    public var cover: URL?
+}
+
+/// Wohin ein Song aus dem X-Ray kommt.
+public enum SpotifyDestination: String, Codable, Sendable, CaseIterable {
+    /// Eine eigene Playlist „Frames“, wie Shazam es macht. Wird beim ersten Song angelegt.
+    case playlist
+    /// „Lieblingssongs“ des Kontos.
+    case liked
 }
 
 public struct SpotifyClient: Sendable {
     public static let port: UInt16 = 43821
     public static let redirectURI = "http://127.0.0.1:43821/spotify"
-    public static let scopes = "user-library-modify user-library-read"
+    public static let scopes = "user-library-modify user-library-read playlist-modify-private playlist-modify-public"
+    public static let playlistName = "Frames"
 
     public let clientId: String
     private let transport: HTTPTransport
@@ -141,7 +153,9 @@ public struct SpotifyClient: Sendable {
         return best.map {
             SpotifyTrack(
                 uri: $0.uri, name: $0.name, artist: $0.artists.map(\.name).joined(separator: ", "),
-                link: $0.external_urls?.spotify.flatMap(URL.init(string:))
+                link: $0.external_urls?.spotify.flatMap(URL.init(string:)),
+                album: $0.album?.name,
+                cover: $0.album?.coverURL
             )
         }
     }
@@ -154,6 +168,35 @@ public struct SpotifyClient: Sendable {
         request.httpMethod = "PUT"
         request.setValue("Bearer \(token.accessToken)", forHTTPHeaderField: "Authorization")
         let response = try await transport.send(request)
+        try Self.check(response)
+    }
+
+    /// Legt die private Playlist „Frames“ an und gibt ihre id zurück.
+    public func createPlaylist(token: SpotifyToken) async throws -> String {
+        var request = URLRequest(url: URL(string: "https://api.spotify.com/v1/me/playlists")!)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "name": Self.playlistName,
+            "public": false,
+            "description": "Songs aus dem X-Ray von Frames",
+        ])
+        let response = try await transport.send(request)
+        try Self.check(response)
+        return try decodeJSON(PlaylistResponse.self, from: response.data).id
+    }
+
+    /// Hängt Songs an eine Playlist an. Wurde die Playlist gelöscht, kommt `playlistMissing`.
+    public func add(uris: [String], toPlaylist playlistId: String, token: SpotifyToken) async throws {
+        let id = playlistId.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? playlistId
+        var request = URLRequest(url: URL(string: "https://api.spotify.com/v1/playlists/\(id)/items")!)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["uris": Array(uris.prefix(100))])
+        let response = try await transport.send(request)
+        if response.status == 404 { throw SpotifyError.playlistMissing }
         try Self.check(response)
     }
 
@@ -210,6 +253,14 @@ private struct TokenResponse: Decodable {
     let expires_in: Int?
 }
 
+public enum SpotifyError: Error, Equatable {
+    case playlistMissing
+}
+
+private struct PlaylistResponse: Decodable {
+    let id: String
+}
+
 private struct SearchResponse: Decodable {
     struct Page: Decodable { let items: [Item] }
     struct Item: Decodable {
@@ -217,6 +268,22 @@ private struct SearchResponse: Decodable {
         let name: String
         let artists: [Artist]
         let external_urls: Links?
+        let album: Album?
+    }
+    struct Album: Decodable {
+        let name: String?
+        let images: [Image]?
+
+        /// Das kleinste Bild ab 200 Pixel, sonst das größte.
+        var coverURL: URL? {
+            let sorted = (images ?? []).sorted { ($0.width ?? 0) < ($1.width ?? 0) }
+            let pick = sorted.first { ($0.width ?? 0) >= 200 } ?? sorted.last
+            return pick.flatMap { URL(string: $0.url) }
+        }
+    }
+    struct Image: Decodable {
+        let url: String
+        let width: Int?
     }
     struct Artist: Decodable { let name: String }
     struct Links: Decodable { let spotify: String? }
