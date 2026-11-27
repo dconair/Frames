@@ -22,6 +22,9 @@ enum TestHooks {
         process.environment["FRAMES_TEST_VIDEO"].flatMap(URL.init(string:))
     }
 
+    /// Der Testfilm tritt als bekannte Serienfolge auf, damit das X-Ray echte Besetzung und Musik zeigt.
+    static var opensXRay: Bool { process.arguments.contains("-frames-xray") }
+
     /// Eine feste Quellenliste statt der Antworten der Addons, damit sich Sortierung und Filter ohne Konto zeigen lassen.
     /// Jede Zeile spielt dasselbe frei verfügbare Testvideo.
     static var sampleStreams: [SourcedStream]? {
@@ -51,6 +54,7 @@ enum TestHooks {
     static let sampleStreams: [SourcedStream]? = nil
     static let login: (email: String, password: String)? = nil
     static let video: URL? = nil
+    static let opensXRay = false
     #endif
 }
 #endif

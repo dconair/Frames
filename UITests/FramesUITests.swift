@@ -134,6 +134,7 @@ final class FramesUITests: XCTestCase {
         app.launch()
 
         let loaded = waitForContent(in: app, seconds: 90)
+        try skipIfPasswordResetRequired(in: app, loaded: loaded)
         let stillAtLogin = app.staticTexts["Mit Stremio anmelden"].exists
         XCTAssertFalse(stillAtLogin, "Die App steht nach der Anmeldung noch auf der Anmeldeseite.")
         XCTAssertTrue(loaded, "Nach der Anmeldung sind keine Kataloge erschienen.")
@@ -159,7 +160,9 @@ final class FramesUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment = ["FRAMES_TEST_EMAIL": email, "FRAMES_TEST_PASSWORD": password]
         app.launch()
-        XCTAssertTrue(waitForContent(in: app, seconds: 90), "Nach der Anmeldung sind keine Kataloge erschienen.")
+        let loaded = waitForContent(in: app, seconds: 90)
+        try skipIfPasswordResetRequired(in: app, loaded: loaded)
+        XCTAssertTrue(loaded, "Nach der Anmeldung sind keine Kataloge erschienen.")
         sleep(5)
         browse(in: app)
 
@@ -267,7 +270,111 @@ final class FramesUITests: XCTestCase {
         #endif
     }
 
+    // MARK: X-Ray
+
+    /// Das Testvideo tritt als Folge einer bekannten Serie auf. Pausieren zeigt die Gesichter,
+    /// die X-Ray-Taste öffnet Besetzung und Musik.
+    func testXRay() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-frames-gast", "-frames-xray"]
+        app.launchEnvironment = ["FRAMES_TEST_VIDEO": sampleMP4]
+        app.launch()
+
+        let status = app.descendants(matching: .any)["player-status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 30), "Der Player ist nicht erschienen.")
+        var hasPicture = false
+        for _ in 0..<60 where !hasPicture {
+            hasPicture = status.label.contains("bild=true")
+            if !hasPicture { sleep(1) }
+        }
+        sleep(4)
+
+        // Pause: über der Zeitleiste erscheinen die ersten Gesichter.
+        #if os(tvOS)
+        XCUIRemote.shared.press(.select)
+        #else
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap()
+        sleep(1)
+        let pause = app.buttons["PAUSE"]
+        if pause.exists { pause.tap() }
+        #endif
+        let teaser = app.descendants(matching: .any)["xray-teaser"]
+        print("FRAMES-UI X-Ray-Vorschau beim Pausieren: \(teaser.waitForExistence(timeout: 20))")
+        sleep(3)
+        snap("30-XRay-Pause")
+
+        let button = app.buttons["xray-button"]
+        XCTAssertTrue(button.waitForExistence(timeout: 20), "Die X-Ray-Taste fehlt.")
+        #if os(tvOS)
+        XCUIRemote.shared.press(.down)
+        sleep(2)
+        print("FRAMES-UI Fokus vor X-Ray: \(focusedLabel(in: app))")
+        XCUIRemote.shared.press(.select)
+        #else
+        if !button.isHittable {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap()
+            sleep(1)
+        }
+        button.tap()
+        #endif
+        let cranston = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Bryan Cranston'")).firstMatch
+        let hasCast = cranston.waitForExistence(timeout: 20)
+        sleep(2)
+        print("FRAMES-UI X-Ray Besetzung gefunden=\(hasCast)")
+        XCTAssertTrue(hasCast, "Im X-Ray fehlt die Besetzung.")
+        snap("31-XRay-Besetzung")
+
+        #if os(tvOS)
+        for _ in 0..<5 {
+            XCUIRemote.shared.press(.down)
+            sleep(1)
+        }
+        snap("32-XRay-Besetzung-weiter")
+        for _ in 0..<8 {
+            XCUIRemote.shared.press(.up)
+        }
+        sleep(1)
+        XCUIRemote.shared.press(.right)
+        sleep(1)
+        XCUIRemote.shared.press(.select)
+        #else
+        app.swipeUp()
+        sleep(2)
+        snap("32-XRay-Besetzung-weiter")
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'MUSIK'")).firstMatch.tap()
+        #endif
+        let music = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Music From the Original Series'")).firstMatch
+        let hasMusic = music.waitForExistence(timeout: 30)
+        print("FRAMES-UI X-Ray Musik gefunden=\(hasMusic)")
+        XCTAssertTrue(hasMusic, "Im X-Ray fehlt der Soundtrack.")
+        sleep(3)
+        snap("33-XRay-Musik")
+
+        #if os(tvOS)
+        // Ein Song zeigt auf dem Fernseher den QR-Code für Spotify.
+        for _ in 0..<2 {
+            XCUIRemote.shared.press(.down)
+            sleep(1)
+        }
+        XCUIRemote.shared.press(.select)
+        sleep(3)
+        snap("34-XRay-QR")
+        XCUIRemote.shared.press(.menu)
+        sleep(2)
+        #endif
+    }
+
     // MARK: Hilfen
+
+    /// Sperrt Stremio das Test-Konto bis zu einem neuen Passwort, ist das kein Fehler der App.
+    private func skipIfPasswordResetRequired(in app: XCUIApplication, loaded: Bool) throws {
+        guard !loaded else { return }
+        let notice = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] 'neues Passwort'")).firstMatch
+        if notice.exists {
+            print("FRAMES-UI Konto: Stremio verlangt ein neues Passwort, Test übersprungen.")
+            throw XCTSkip("Stremio verlangt für das Test-Konto ein neues Passwort. Danach FRAMES_PASSWORD aktualisieren.")
+        }
+    }
 
     private func time(in label: String) -> Int {
         guard let part = label.split(separator: " ").first(where: { $0.hasPrefix("zeit=") }) else { return -1 }

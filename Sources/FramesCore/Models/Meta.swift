@@ -166,6 +166,14 @@ struct MetaEnvelope: Decodable {
 }
 
 extension Meta {
+    /// Erstes Jahr aus Angaben wie „2023“ oder „2008–2013“.
+    public var year: Int? {
+        if let text = releaseInfo, let range = text.range(of: #"[0-9]{4}"#, options: .regularExpression) {
+            return Int(text[range])
+        }
+        return released.map { Calendar(identifier: .gregorian).component(.year, from: $0) }
+    }
+
     /// Laufzeit in Minuten, gelesen aus Angaben wie „148 min“, „2h 28min“ oder „2:28“.
     public var runtimeMinutes: Int? { Self.minutes(from: runtime) }
 

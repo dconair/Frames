@@ -55,14 +55,15 @@ private struct PlayerStage: View {
     @State private var controlsVisible = true
     @State private var panel: Panel?
     @State private var hideTask: Task<Void, Never>?
+    @State private var xray = XRayModel()
     @FocusState private var focus: FocusTarget?
 
     private enum Panel {
-        case audio, subtitles
+        case audio, subtitles, xray
     }
 
     private enum FocusTarget: Hashable {
-        case surface, tracks
+        case surface, tracks, xray
     }
 
     var body: some View {
@@ -86,7 +87,12 @@ private struct PlayerStage: View {
                 controls.transition(.opacity)
             }
 
-            if let panel {
+            if panel == .xray {
+                XRayPanel(model: xray, title: route.item.subtitle.map { "\(route.item.name) · \($0)" } ?? route.item.name) {
+                    closePanel()
+                }
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else if let panel {
                 trackPanel(panel)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
@@ -109,6 +115,8 @@ private struct PlayerStage: View {
             focus = .surface
             scheduleHide()
         }
+        // Besetzung und Musik schon beim Start laden, damit das X-Ray beim Pausieren sofort da ist.
+        .task { await xray.load(route.item.xrayRequest) }
         .onChange(of: session.isPlaying) { _, isPlaying in
             if isPlaying {
                 scheduleHide()
@@ -169,6 +177,14 @@ private struct PlayerStage: View {
             switch direction {
             case .left: skip(.backward)
             case .right: skip(.forward)
+            case .down:
+                // Die Fläche füllt den ganzen Bildschirm, darunter liegt für die Fokus-Steuerung nichts.
+                // Deshalb führt „runter“ ausdrücklich zur X-Ray-Taste, sonst zu Ton und Untertitel.
+                showControls()
+                Task { @MainActor in
+                    await Task.yield()
+                    focus = xray.isEmpty ? .tracks : .xray
+                }
             default: showControls()
             }
         }
@@ -241,6 +257,13 @@ private struct PlayerStage: View {
             Spacer(minLength: 0)
             #endif
 
+            if !session.isPlaying, session.hasPicture, panel == nil {
+                XRayTeaser(model: xray)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.bottom, Signal.pt(20))
+                    .transition(.opacity.combined(with: .move(edge: .leading)))
+            }
+
             if let flash = session.flash {
                 Text(flash)
                     .font(.signalMono(26, .bold))
@@ -260,6 +283,12 @@ private struct PlayerStage: View {
                     .foregroundStyle(Signal.Palette.textMuted)
                 #endif
                 Spacer(minLength: 0)
+                if !xray.isEmpty {
+                    Button("X-RAY") { openXRay() }
+                        .buttonStyle(SignalButtonStyle())
+                        .focused($focus, equals: .xray)
+                        .accessibilityIdentifier("xray-button")
+                }
                 if session.audioTracks.count > 1 {
                     Button("TON") { open(.audio) }
                         .buttonStyle(SignalButtonStyle())
@@ -319,11 +348,7 @@ private struct PlayerStage: View {
                     .padding(Signal.pt(10))
                 }
                 .scrollClipDisabled()
-                Button("SCHLIESSEN") {
-                    panel = nil
-                    focus = .surface
-                    scheduleHide()
-                }
+                Button("SCHLIESSEN") { closePanel() }
                 .buttonStyle(SignalButtonStyle())
             }
             .padding(Signal.pt(32))
@@ -369,6 +394,18 @@ private struct PlayerStage: View {
     private func open(_ kind: Panel) {
         hideTask?.cancel()
         panel = kind
+    }
+
+    /// Wie bei Prime Video hält das X-Ray den Film an.
+    private func openXRay() {
+        if session.isPlaying { session.togglePlay() }
+        open(.xray)
+    }
+
+    private func closePanel() {
+        panel = nil
+        focus = .surface
+        scheduleHide()
     }
 
     private func showControls() {

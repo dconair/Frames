@@ -59,6 +59,10 @@ if hasAccount, let email = environment["FRAMES_EMAIL"], let password = environme
         let session = try await api.login(email: email, password: password)
         authKey = session.authKey
         ok("Anmeldung angenommen, Sitzungsschlüssel erhalten")
+    } catch let error as FramesError where error.requiresPasswordReset {
+        // Kein Fehler von Frames: Stremio sperrt das Konto bis zum neuen Passwort. Weiter mit der Grundausstattung.
+        warn("Stremio verlangt für das Test-Konto ein neues Passwort. Danach das Secret FRAMES_PASSWORD aktualisieren. "
+            + "Geprüft wird bis dahin die Grundausstattung.")
     } catch {
         fail("Anmeldung: \(error.localizedDescription)")
     }
@@ -267,6 +271,33 @@ if let best = ranked.first, let url = best.stream.playableURL {
 } else if authKey != nil {
     step("Abruf des besten Links")
     fail("Kein direkter Link für \(streamId). Liefert dein Debrid-Addon für diesen Titel Streams?")
+}
+
+// MARK: X-Ray
+
+// Feste, bekannte Titel, damit die Ausgabe nichts über das Konto verrät.
+step("X-Ray: Besetzung und Musik")
+let xraySeries = XRayRequest(metaId: "tt0903747", type: "series", name: "Breaking Bad", videoId: "tt0903747:2:3")
+let seriesCast = await CastService().cast(for: xraySeries)
+if seriesCast.count >= 5, seriesCast.contains(where: \.isGuest), seriesCast.contains(where: { $0.photo != nil }) {
+    ok("Serie: \(seriesCast.count) Personen, \(seriesCast.filter(\.isGuest).count) Gäste der Folge, z. B. \(seriesCast[0].name) als \(seriesCast[0].character ?? "?")")
+} else {
+    fail("Serie: Besetzung von TVmaze unvollständig (\(seriesCast.count) Personen)")
+}
+let xrayMovie = XRayRequest(
+    metaId: "tt15398776", type: "movie", name: "Oppenheimer", year: 2023,
+    castNames: ["Cillian Murphy", "Emily Blunt", "Matt Damon", "Robert Downey Jr."]
+)
+let movieCast = await CastService().cast(for: xrayMovie)
+let withPhotos = movieCast.filter { $0.photo != nil }.count
+if withPhotos >= 2 { ok("Film: \(withPhotos) von \(movieCast.count) Namen mit Foto") } else { fail("Film: nur \(withPhotos) Fotos gefunden") }
+for request in [xraySeries, xrayMovie] {
+    let albums = (try? await SoundtrackService().soundtracks(for: request)) ?? []
+    if let first = albums.first, let track = first.tracks.first {
+        ok("\(request.name): \(albums.count) Album/Alben, \(first.title) mit \(first.tracks.count) Stücken, z. B. „\(track.title)“ von \(track.artist)")
+    } else {
+        fail("\(request.name): kein Soundtrack bei MusicBrainz gefunden")
+    }
 }
 
 if failures == 0, warnings > 0 {
