@@ -40,6 +40,10 @@ struct PlayerView: View {
             session = newSession
             flow.isPlaying = { [weak newSession] in newSession?.isPlaying ?? false }
             flow.onPlay = { next in Task { await switchEpisode(to: next) } }
+            flow.onSkip = { [weak newSession] segment, announce in
+                guard let newSession else { return }
+                newSession.jump(to: segment.end(duration: newSession.duration), flash: announce ? segment.kind.skippedLabel : nil)
+            }
             let resume = model.resumePosition(metaId: route.item.metaId, videoId: route.item.videoId)
             await newSession.start(route, settings: model.settings, resumeAt: resume)
         }
@@ -128,6 +132,7 @@ private struct PlayerStage: View {
                         "bild=\(session.hasPicture) spielt=\(session.isPlaying) zeit=\(Int(session.time)) "
                             + "dauer=\(Int(session.duration)) fehler=\(session.failure ?? "-") "
                             + "folge=\(route.item.videoId) taste=\(flow.activeSkip?.kind.rawValue ?? "-") "
+                            + "zaehler=\(flow.skipRemaining.map(String.init) ?? "-") "
                             + "karte=\(flow.card.map { String(describing: $0) } ?? "-") folgen=\(flow.meta?.videos.count ?? 0)"
                     )
             }
@@ -141,12 +146,9 @@ private struct PlayerStage: View {
         // Zeitmarken und Folgenliste für jede Folge neu, auch wenn die nächste im selben Player startet.
         .task(id: route.item.videoId) { await flow.load(route, model: model) }
         .onChange(of: session.time) { _, time in
-            let jump = flow.update(
+            flow.update(
                 time: time, duration: session.duration, isScrubbing: session.scrubTime != nil, settings: model.settings
             )
-            if let jump {
-                session.jump(to: jump.end(duration: session.duration), flash: jump.kind.skippedLabel)
-            }
         }
         .onChange(of: session.chapters) { _, chapters in flow.useChapters(chapters) }
         .onChange(of: session.hasEnded) { _, ended in
@@ -489,8 +491,8 @@ private struct PlayerStage: View {
                 .focused($focus, equals: .nextEpisode)
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             } else if let segment = flow.activeSkip, panel == nil {
-                SkipSegmentButton(segment: segment) {
-                    session.jump(to: segment.end(duration: session.duration))
+                SkipSegmentButton(segment: segment, progress: flow.skipProgress) {
+                    flow.skip(segment)
                     focus = .surface
                 }
                 .focused($focus, equals: .segmentSkip)

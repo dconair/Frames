@@ -103,6 +103,7 @@ jobs:
             -scheme Frames \
             -destination "id=$UDID" \
             -only-testing:FramesUITests/FramesUITests/testFolgen \
+            -only-testing:FramesUITests/FramesUITests/testFolgenAutomatisch \
             -resultBundlePath folgen.xcresult \
             -skipPackagePluginValidation 2>&1 \
             | grep -E "FRAMES-UI|error:|Test Case|TEST (SUCCEEDED|FAILED)" || true

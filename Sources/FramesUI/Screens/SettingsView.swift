@@ -23,7 +23,10 @@ struct SettingsView: View {
                 SettingRow("Bildvorschau beim Spulen", detail: "Vorschaubild mit Zeitmarke über der Zeitleiste") {
                     SignalSegments([(true, "AN"), (false, "AUS")], selection: $model.settings.scrubPreview)
                 }
-                SettingRow("Intro und Rückblick überspringen", detail: "Marken aus IntroDB, TheIntroDB, AniSkip oder den Kapiteln der Datei") {
+                SettingRow(
+                    "Intro und Rückblick überspringen",
+                    detail: "Taste: Einblendung zum Antippen · Auto: Taste füllt sich, nach \(EpisodeFlow.skipCountdown) Sekunden wird gesprungen"
+                ) {
                     SignalSegments(
                         [(IntroSkipMode.showButton, "TASTE"), (IntroSkipMode.automatic, "AUTO"), (IntroSkipMode.off, "AUS")],
                         selection: $model.settings.introSkip

@@ -12,6 +12,8 @@ import FramesCore
 final class EpisodeFlow {
     /// Sekunden, die der Countdown zur nächsten Folge läuft.
     static let countdown = 10
+    /// Sekunden, bis Rückblick oder Intro im Modus „Automatisch“ übersprungen werden.
+    static let skipCountdown = 5
 
     enum CardState: Equatable {
         /// Der Abspann läuft, die nächste Folge startet, wenn der Zähler null erreicht.
@@ -28,6 +30,12 @@ final class EpisodeFlow {
     private(set) var segments = MediaSegments()
     /// Rückblick oder Intro, in dem die Wiedergabe gerade steht.
     private(set) var activeSkip: MediaSegment?
+    /// Im Modus „Automatisch“: wie weit sich die Taste schon gefüllt hat (0 bis 1). `nil` ohne Countdown.
+    private(set) var skipProgress: Double?
+    /// Sekunden bis zum automatischen Sprung.
+    private(set) var skipRemaining: Int?
+    /// Wie weit sich die Taste „Nächste Folge“ schon gefüllt hat.
+    private(set) var cardProgress: Double = 0
     /// Die Folge nach der laufenden.
     private(set) var next: Video?
     /// Die Karte unten rechts. `nil`, solange der Abspann nicht läuft oder sie weggeklickt wurde.
@@ -37,6 +45,8 @@ final class EpisodeFlow {
 
     /// Startet eine Folge im laufenden Player. Setzt der Player.
     @ObservationIgnored var onPlay: ((PlayerRoute) -> Void)?
+    /// Springt ans Ende eines Abschnitts, mit oder ohne Einblendung. Setzt der Player.
+    @ObservationIgnored var onSkip: ((MediaSegment, _ announce: Bool) -> Void)?
     /// Wahr, solange die Wiedergabe läuft. Pausiert, steht der Countdown.
     @ObservationIgnored var isPlaying: () -> Bool = { true }
 
@@ -48,6 +58,7 @@ final class EpisodeFlow {
     @ObservationIgnored private var autoSkipped: Set<Double> = []
     @ObservationIgnored private var creditsDismissed = false
     @ObservationIgnored private var countdownTask: Task<Void, Never>?
+    @ObservationIgnored private var skipTask: Task<Void, Never>?
     @ObservationIgnored private var prefetch: Task<PlayerRoute?, Never>?
     @ObservationIgnored private var prefetchedId: String?
 
@@ -101,6 +112,7 @@ final class EpisodeFlow {
 
     private func reset() {
         countdownTask?.cancel()
+        cancelSkipCountdown()
         prefetch?.cancel()
         prefetch = nil
         prefetchedId = nil
@@ -117,26 +129,30 @@ final class EpisodeFlow {
 
     func stop() {
         countdownTask?.cancel()
+        skipTask?.cancel()
         prefetch?.cancel()
     }
 
     // MARK: Während der Wiedergabe
 
-    /// Bei jeder neuen Zeit: Taste für Rückblick oder Intro, automatischer Sprung, Karte im Abspann.
-    /// Gibt den Abschnitt zurück, wenn jetzt automatisch über ihn gesprungen werden soll.
-    func update(time: Double, duration: Double, isScrubbing: Bool, settings: PlaybackSettings) -> MediaSegment? {
+    /// Bei jeder neuen Zeit: Taste für Rückblick oder Intro, im Modus „Automatisch“ mit Countdown, Karte im Abspann.
+    func update(time: Double, duration: Double, isScrubbing: Bool, settings: PlaybackSettings) {
         let skippable = settings.introSkip == .off ? nil : segments.skippable(at: time, duration: duration)
-        var jump: MediaSegment?
-        if let segment = skippable, settings.introSkip == .automatic, !isScrubbing, !autoSkipped.contains(segment.start) {
-            autoSkipped.insert(segment.start)
-            jump = segment
+        if skippable != activeSkip {
+            cancelSkipCountdown()
+            withAnimation(Signal.Motion.sheet) { activeSkip = skippable }
         }
-        let shown = jump == nil ? skippable : nil
-        if shown != activeSkip {
-            withAnimation(Signal.Motion.sheet) { activeSkip = shown }
+        if let segment = skippable, settings.introSkip == .automatic {
+            if isScrubbing {
+                // Wer selbst spult, entscheidet: für diesen Abschnitt bleibt es bei der Taste.
+                if skipTask != nil { autoSkipped.insert(segment.start) }
+                cancelSkipCountdown()
+            } else if skipTask == nil, !autoSkipped.contains(segment.start) {
+                startSkipCountdown(for: segment)
+            }
         }
 
-        guard let next, duration > 0, card != .loading else { return jump }
+        guard let next, duration > 0, card != .loading else { return }
         let creditsAt = segments.creditsStart(duration: duration) ?? Self.fallbackCredits(duration: duration)
         if time >= creditsAt, card == nil, !creditsDismissed, !isScrubbing {
             showCard(for: next, settings: settings)
@@ -147,7 +163,45 @@ final class EpisodeFlow {
         }
         // Eine Minute vor dem Abspann schon die Quelle suchen, damit es danach ohne Warten weitergeht.
         if time >= creditsAt - 60 { prefetchNext(settings: settings) }
-        return jump
+    }
+
+    /// Die Taste füllt sich in fünf Sekunden, dann wird gesprungen. Pausiert, steht der Countdown.
+    private func startSkipCountdown(for segment: MediaSegment) {
+        let total = Self.skipCountdown
+        skipRemaining = total
+        skipProgress = 0
+        withAnimation(.linear(duration: 1)) { skipProgress = 1 / Double(total) }
+        skipTask = Task { [weak self] in
+            var remaining = total
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard let self, !Task.isCancelled else { return }
+                guard self.isPlaying() else { continue }
+                remaining -= 1
+                if remaining <= 0 {
+                    self.skip(segment, announce: true)
+                    return
+                }
+                self.skipRemaining = remaining
+                withAnimation(.linear(duration: 1)) {
+                    self.skipProgress = Double(total - remaining + 1) / Double(total)
+                }
+            }
+        }
+    }
+
+    private func cancelSkipCountdown() {
+        skipTask?.cancel()
+        skipTask = nil
+        skipProgress = nil
+        skipRemaining = nil
+    }
+
+    /// Springt über Rückblick oder Intro, per Taste oder nach dem Countdown.
+    func skip(_ segment: MediaSegment, announce: Bool = false) {
+        autoSkipped.insert(segment.start)
+        cancelSkipCountdown()
+        onSkip?(segment, announce)
     }
 
     /// Ohne Marken erscheint die Karte 25 Sekunden vor Schluss, aber nur bei Folgenlänge.
@@ -173,6 +227,8 @@ final class EpisodeFlow {
             return
         }
         withAnimation(Signal.Motion.sheet) { card = .counting(remaining: Self.countdown) }
+        cardProgress = 0
+        withAnimation(.linear(duration: 1)) { cardProgress = 1 / Double(Self.countdown) }
         countdownTask?.cancel()
         countdownTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -183,7 +239,10 @@ final class EpisodeFlow {
                     self.play(video: video, settings: settings)
                     return
                 }
-                withAnimation(.linear(duration: 1)) { self.card = .counting(remaining: remaining - 1) }
+                withAnimation(.linear(duration: 1)) {
+                    self.card = .counting(remaining: remaining - 1)
+                    self.cardProgress = Double(Self.countdown - remaining + 2) / Double(Self.countdown)
+                }
             }
         }
     }

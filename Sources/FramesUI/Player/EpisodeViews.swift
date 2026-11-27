@@ -5,21 +5,33 @@ import FramesCore
 // MARK: Überspringen
 
 /// „Intro überspringen“ unten rechts, solange Rückblick oder Intro laufen. Auch ohne eingeblendete Bedienung.
+/// Im Modus „Automatisch“ füllt sich die Taste von links nach rechts, dann wird von selbst gesprungen.
 struct SkipSegmentButton: View {
     let segment: MediaSegment
+    /// Fortschritt des Countdowns, `nil` ohne Countdown.
+    var progress: Double?
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: Signal.pt(12)) {
-                Text(segment.kind.skipLabel)
-                Text("»")
+        Group {
+            if let progress {
+                Button(action: action) { label }
+                    .buttonStyle(CountdownButtonStyle(progress: progress))
+            } else {
+                Button(action: action) { label }
+                    .buttonStyle(SignalButtonStyle(.primary))
             }
         }
-        .buttonStyle(SignalButtonStyle(.primary))
         .shadow(color: .black.opacity(0.6), radius: 18, y: 8)
         .shadow(color: Signal.Palette.lime.opacity(0.35), radius: 16)
         .accessibilityIdentifier("segment-skip")
+    }
+
+    private var label: some View {
+        HStack(spacing: Signal.pt(12)) {
+            Text(segment.kind.skipLabel)
+            Text("»")
+        }
     }
 }
 
@@ -81,7 +93,7 @@ struct NextEpisodeCard: View {
                     Text("▶  NÄCHSTE FOLGE  \(remaining)")
                         .monospacedDigit()
                 }
-                .buttonStyle(CountdownButtonStyle(progress: 1 - Double(remaining) / Double(EpisodeFlow.countdown)))
+                .buttonStyle(CountdownButtonStyle(progress: flow.cardProgress))
                 .accessibilityIdentifier("next-episode-play")
                 Button("ABSPANN ANSEHEN", action: onDismiss)
                     .buttonStyle(SignalButtonStyle())
@@ -127,7 +139,7 @@ struct NextEpisodeCard: View {
 }
 
 /// Primärtaste, die sich während des Countdowns von links nach rechts füllt.
-private struct CountdownButtonStyle: ButtonStyle {
+struct CountdownButtonStyle: ButtonStyle {
     let progress: Double
 
     func makeBody(configuration: Configuration) -> some View {
