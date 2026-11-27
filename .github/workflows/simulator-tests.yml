@@ -68,6 +68,7 @@ jobs:
             | grep -E "FRAMES-UI|error:|Test Case|Test Suite|TEST (SUCCEEDED|FAILED)|Executed|BUILD FAILED|Testing failed" || true
           grep -q "TEST SUCCEEDED" xcodebuild.log
       - name: Start-Animationen aufnehmen
+        if: always()
         run: |
           mkdir -p start
           xcrun simctl io "$UDID" recordVideo --codec h264 --force "start/start-animationen-${{ matrix.platform }}.mp4" &
