@@ -15,13 +15,14 @@ Lauffähig von der Anmeldung bis zur Wiedergabe:
 - Quellenliste mit Technik-Badges (Auflösung, Bild, Ton, Größe), beste Quelle zuerst
 - Eigener Player auf allen Geräten: MKV und praktisch jedes andere Format, Dolby Vision, HDR10+ und Atmos über die Wege des Systems, Tonspuren, Untertitel
 - Skip mit getrennt einstellbaren Intervallen für vor und zurück (5, 10, 20 Sekunden)
+- Rückblick und Intro überspringen, per Taste oder automatisch. Die Zeitmarken kommen aus [IntroDB](https://introdb.app) und [TheIntroDB](https://theintrodb.org) (Serien mit IMDb-Nummer), aus [AniSkip](https://aniskip.com) (Anime aus Kitsu-Katalogen) und sonst aus Kapiteln der Datei, die „Intro“, „Opening“ oder „Abspann“ heißen
+- Nächste Folge: sobald der Abspann läuft, erscheint eine Karte mit 10 Sekunden Countdown. Die Quelle der nächsten Folge sucht Frames selbst aus, bevorzugt aus derselben Reihe (`bingeGroup`) und vom selben Addon
+- Folgenliste im Player: Staffeln und Folgen durchblättern und direkt wechseln
 - Bildvorschau beim Spulen, aus den schon geladenen Daten und ohne zweite Verbindung zum Debrid-Dienst
 - X-Ray im Player: beim Pausieren die ersten Gesichter, über die Taste X-RAY Besetzung mit Fotos und Rollen (bei Serien mit den Gaststars der Folge) und der Soundtrack des Titels. Songs mit Albumcover. Mit verbundenem Spotify-Konto legt ein Tipp den Song in die eigene Playlist „Frames“ (oder in die Lieblingssongs), ohne Spotify zu öffnen. Ohne Verbindung öffnet er Spotify, auf dem Apple TV per QR-Code
 - Wiedergabestand geht zurück ins Stremio-Konto, die Wiedergabe setzt dort fort, wo sie auf einem anderen Gerät endete
 
 - Acht wechselnde Start-Animationen, wählbare App-Symbole und ein Top Shelf mit „Weiter ansehen“ auf dem Apple TV, siehe [docs/start-symbole-top-shelf.md](docs/start-symbole-top-shelf.md)
-
-Als Nächstes: Intro überspringen und nächste Folge, Verteilung über TestFlight.
 
 Den Player treibt [AetherEngine](https://github.com/superuser404notfound/AetherEngine) an (FFmpeg liest, VideoToolbox dekodiert, AVPlayer zeigt). Die Bedienung darüber ist die von Frames.
 

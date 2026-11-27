@@ -19,6 +19,12 @@ public struct RootView: View {
         _model = State(initialValue: model)
     }
 
+    /// Für den Test mit `-frames-folgen`: der Testfilm als erste Folge einer bekannten Serie.
+    private static let episodeTestItem = PlaybackItem(
+        metaId: "tt0903747", type: "series", name: "Breaking Bad", poster: nil,
+        videoId: "tt0903747:1:1", subtitle: "S01 E01 · Pilot"
+    )
+
     public var body: some View {
         ZStack {
             Signal.Palette.background.ignoresSafeArea()
@@ -31,7 +37,9 @@ public struct RootView: View {
             case .ready:
                 if let video = TestHooks.video {
                     NavigationStack {
-                        PlayerView(route: PlayerRoute(url: video, headers: [:], item: TestHooks.opensXRay
+                        PlayerView(route: PlayerRoute(url: video, headers: [:], item: TestHooks.playsEpisodes
+                            ? Self.episodeTestItem
+                            : TestHooks.opensXRay
                             ? PlaybackItem(
                                 metaId: "tt0903747", type: "series", name: "Breaking Bad", poster: nil,
                                 videoId: "tt0903747:2:3", subtitle: "S02 E03 · Bit by a Dead Bee", year: 2008

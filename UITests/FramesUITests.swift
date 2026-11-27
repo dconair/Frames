@@ -431,6 +431,96 @@ final class FramesUITests: XCTestCase {
         #endif
     }
 
+    // MARK: Folgen
+
+    /// Der Testfilm als erste Folge von Breaking Bad mit festen Marken: Rückblick und Intro überspringen,
+    /// im Abspann der Countdown, danach startet die zweite Folge im selben Player, dann die Folgenliste.
+    func testFolgen() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-frames-gast", "-frames-folgen"]
+        app.launchEnvironment = ["FRAMES_TEST_VIDEO": sampleMP4]
+        app.launch()
+
+        let status = app.descendants(matching: .any)["player-status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 30), "Der Player ist nicht erschienen.")
+        _ = wait(for: "bild=true", in: status, seconds: 60)
+        print("FRAMES-UI Folgen Start: \(status.label)")
+
+        // Rückblick, dann Intro: jeweils die Taste unten rechts.
+        for kind in ["recap", "intro"] {
+            guard wait(for: "taste=\(kind)", in: status, seconds: 25) else {
+                print("FRAMES-UI Folgen: keine Taste für \(kind): \(status.label)")
+                continue
+            }
+            sleep(1)
+            snap("30-Folgen-Taste-\(kind)")
+            pressSkip(in: app)
+            sleep(2)
+            print("FRAMES-UI Folgen nach Überspringen \(kind): \(status.label)")
+        }
+
+        // Abspann: die Karte mit dem Countdown.
+        let counting = wait(for: "karte=counting", in: status, seconds: 50)
+        print("FRAMES-UI Folgen Abspann: \(status.label)")
+        XCTAssertTrue(counting, "Im Abspann erscheint keine Karte zur nächsten Folge.")
+        sleep(2)
+        snap("31-Folgen-Countdown")
+        sleep(4)
+        snap("32-Folgen-Countdown-später")
+
+        let switched = wait(for: "folge=tt0903747:1:2", in: status, seconds: 30)
+        print("FRAMES-UI Folgen danach: \(status.label)")
+        XCTAssertTrue(switched, "Die nächste Folge startet nicht.")
+        _ = wait(for: "bild=true", in: status, seconds: 30)
+        sleep(3)
+        snap("33-Folgen-nächste-Folge")
+
+        // Die Folgenliste.
+        #if os(tvOS)
+        XCUIRemote.shared.press(.down)
+        for _ in 0..<10 where focusedLabel(in: app) != "FOLGEN" {
+            usleep(300_000)
+        }
+        print("FRAMES-UI Folgen Fokus: \(focusedLabel(in: app))")
+        XCUIRemote.shared.press(.select)
+        #else
+        app.tap()
+        let button = app.buttons["episodes-button"]
+        if button.waitForExistence(timeout: 5) { button.tap() }
+        #endif
+        sleep(3)
+        snap("34-Folgen-Liste")
+        print("FRAMES-UI Folgen Liste offen: \(app.staticTexts["S01 E02"].exists)")
+        sleep(3)
+    }
+
+    private func wait(for text: String, in status: XCUIElement, seconds: Int) -> Bool {
+        for _ in 0..<(seconds * 2) {
+            if status.label.contains(text) { return true }
+            usleep(500_000)
+        }
+        return false
+    }
+
+    private func pressSkip(in app: XCUIApplication) {
+        #if os(tvOS)
+        // Der Fokus springt von selbst auf die Taste.
+        for _ in 0..<10 where !focusedLabel(in: app).contains("ÜBERSPRINGEN") {
+            usleep(300_000)
+        }
+        let focused = focusedLabel(in: app)
+        print("FRAMES-UI Folgen Fokus: \(focused)")
+        if focused.contains("ÜBERSPRINGEN") {
+            XCUIRemote.shared.press(.select)
+        } else {
+            print("FRAMES-UI Folgen: Taste ohne Fokus, nichts gedrückt")
+        }
+        #else
+        let button = app.buttons["segment-skip"]
+        if button.waitForExistence(timeout: 3) { button.tap() }
+        #endif
+    }
+
     // MARK: Hilfen
 
     /// Sperrt Stremio das Test-Konto bis zu einem neuen Passwort, ist das kein Fehler der App.
