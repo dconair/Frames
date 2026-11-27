@@ -22,7 +22,7 @@ targets:
         product: FramesUI
       # Top Shelf: gibt es nur auf dem Apple TV.
       - target: FramesTopShelf
-        platformFilter: tvOS
+        platformFilters: [tvOS]
     # Das Linkschema frames:// öffnet die App, zum Beispiel aus dem Top Shelf.
     info:
       path: Config/Frames-Info.plist
