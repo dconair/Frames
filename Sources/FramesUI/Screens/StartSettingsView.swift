@@ -122,11 +122,12 @@ struct StartSettingsSection: View {
                             .stroke(isOn ? Signal.Palette.lime : Signal.Palette.line, lineWidth: isOn ? 3 : 1)
                     }
                 Text(choice.label)
-                    .font(.signalMono(13, isOn ? .bold : .medium))
+                    .font(.signalMono(12, isOn ? .bold : .medium))
                     .foregroundStyle(isOn ? Signal.Palette.lime : Signal.Palette.textMuted)
                     .lineLimit(2)
+                    .minimumScaleFactor(0.6)
                     .multilineTextAlignment(.center)
-                    .frame(width: side + Signal.pt(24))
+                    .frame(width: max(side + Signal.pt(24), 108))
             }
         }
         .buttonStyle(.plain)
