@@ -531,7 +531,7 @@ private struct PlayerStage: View {
                     case .down:
                         // Wie auf der Bildfläche: runter führt zu den Tasten unten.
                         showControls()
-                        focusSoon(flow.isSeries ? .episodes : .tracks)
+                        focusSoon(flow.isSeries ? .episodes : (xray.isEmpty ? .tracks : .xray))
                     default:
                         focus = .surface
                         showControls()
