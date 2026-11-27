@@ -15,7 +15,7 @@ Lauffähig von der Anmeldung bis zur Wiedergabe:
 - Quellenliste mit Technik-Badges (Auflösung, Bild, Ton, Größe), beste Quelle zuerst
 - Eigener Player auf allen Geräten: MKV und praktisch jedes andere Format, Dolby Vision, HDR10+ und Atmos über die Wege des Systems, Tonspuren, Untertitel
 - Skip mit getrennt einstellbaren Intervallen für vor und zurück (5, 10, 20 Sekunden)
-- Rückblick und Intro überspringen, per Taste oder automatisch. Die Zeitmarken kommen aus [IntroDB](https://introdb.app) und [TheIntroDB](https://theintrodb.org) (Serien mit IMDb-Nummer), aus [AniSkip](https://aniskip.com) (Anime aus Kitsu-Katalogen) und sonst aus Kapiteln der Datei, die „Intro“, „Opening“ oder „Abspann“ heißen
+- Rückblick und Intro überspringen, per Taste oder automatisch: die Taste füllt sich wie bei Netflix, nach 5 Sekunden wird gesprungen. Die Zeitmarken kommen aus [IntroDB](https://introdb.app) und [TheIntroDB](https://theintrodb.org) (Serien mit IMDb-Nummer), aus [AniSkip](https://aniskip.com) (Anime aus Kitsu-Katalogen) und sonst aus Kapiteln der Datei, die „Intro“, „Opening“ oder „Abspann“ heißen
 - Nächste Folge: sobald der Abspann läuft, erscheint eine Karte mit 10 Sekunden Countdown. Die Quelle der nächsten Folge sucht Frames selbst aus, bevorzugt aus derselben Reihe (`bingeGroup`) und vom selben Addon
 - Folgenliste im Player: Staffeln und Folgen durchblättern und direkt wechseln
 - Bildvorschau beim Spulen, aus den schon geladenen Daten und ohne zweite Verbindung zum Debrid-Dienst

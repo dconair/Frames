@@ -494,6 +494,40 @@ final class FramesUITests: XCTestCase {
         sleep(3)
     }
 
+    /// Einstellung „Auto“: die Taste füllt sich fünf Sekunden lang, dann springt der Player von selbst,
+    /// ohne dass etwas gedrückt wird.
+    func testFolgenAutomatisch() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-frames-gast", "-frames-folgen", "-frames-auto-skip"]
+        app.launchEnvironment = ["FRAMES_TEST_VIDEO": sampleMP4]
+        app.launch()
+
+        let status = app.descendants(matching: .any)["player-status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 30), "Der Player ist nicht erschienen.")
+        _ = wait(for: "bild=true", in: status, seconds: 60)
+
+        // Rückblick 1–10 s, Intro 14–24 s. Ohne Sprung bräuchte die Wiedergabe jeweils rund 10 Sekunden
+        // vom Erscheinen der Taste bis zum Ende, mit dem Countdown von 5 Sekunden sind es etwa 5.
+        for (kind, end) in [("recap", 10), ("intro", 24)] {
+            XCTAssertTrue(wait(for: "taste=\(kind)", in: status, seconds: 25), "Keine Taste für \(kind): \(status.label)")
+            XCTAssertFalse(status.label.contains("zaehler=-"), "Kein Countdown auf der Taste: \(status.label)")
+            let shownAt = time(in: status.label)
+            let started = Date()
+            print("FRAMES-UI Auto \(kind) Countdown: \(status.label)")
+            sleep(2)
+            snap("36-Auto-Countdown-\(kind)")
+            var jumped = false
+            for _ in 0..<20 where !jumped {
+                jumped = time(in: status.label) >= end
+                if !jumped { usleep(500_000) }
+            }
+            print("FRAMES-UI Auto nach \(kind): \(status.label)")
+            XCTAssertTrue(jumped, "\(kind) wurde nicht von selbst übersprungen: \(status.label)")
+            let waited = Date().timeIntervalSince(started)
+            XCTAssertLessThan(waited, Double(end - shownAt) - 2, "\(kind) lief einfach durch statt zu springen.")
+        }
+    }
+
     private func wait(for text: String, in status: XCUIElement, seconds: Int) -> Bool {
         for _ in 0..<(seconds * 2) {
             if status.label.contains(text) { return true }

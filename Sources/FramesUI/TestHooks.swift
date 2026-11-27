@@ -35,6 +35,9 @@ enum TestHooks {
     /// Intro und Abspann. So lassen sich Überspringen, Countdown und Folgenliste ohne Konto zeigen.
     static var playsEpisodes: Bool { process.arguments.contains("-frames-folgen") }
 
+    /// Rückblick und Intro mit Countdown automatisch überspringen statt nur die Taste zu zeigen.
+    static var autoSkip: Bool { process.arguments.contains("-frames-auto-skip") }
+
     /// Zeitmarken passend zum etwa 52 Sekunden langen Testfilm.
     static var sampleSegments: MediaSegments? {
         guard playsEpisodes else { return nil }
@@ -86,6 +89,7 @@ enum TestHooks {
     static let video: URL? = nil
     static let opensXRay = false
     static let playsEpisodes = false
+    static let autoSkip = false
     static let sampleSegments: MediaSegments? = nil
     static let episodeStreams: [SourcedStream]? = nil
     #endif

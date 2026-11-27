@@ -41,6 +41,9 @@ public final class AppModel {
         self.content = content
         self.store = store
         self.settings = store.loadSettings()
+        if TestHooks.playsEpisodes {
+            settings.introSkip = TestHooks.autoSkip ? .automatic : .showButton
+        }
     }
 
     /// Beim Start: gespeicherte Sitzung wieder aufnehmen und Addons laden.
