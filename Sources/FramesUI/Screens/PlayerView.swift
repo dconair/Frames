@@ -448,10 +448,14 @@ private struct PlayerStage: View {
     }
 
     /// Setzt den Fokus, sobald das Ziel gezeichnet ist. Direkt beim Einblenden greift er auf dem Fernseher noch nicht.
+    /// Während die Taste noch hereinfährt, nimmt der Fernseher den Fokus manchmal nicht an, daher ein paar Versuche.
     private func focusSoon(_ target: FocusTarget) {
         Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(200))
-            focus = target
+            for _ in 0..<6 {
+                try? await Task.sleep(for: .milliseconds(200))
+                guard focus != target else { return }
+                focus = target
+            }
         }
     }
 
