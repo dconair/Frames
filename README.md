@@ -21,7 +21,7 @@ Lauffähig von der Anmeldung bis zur Wiedergabe:
 
 - Acht wechselnde Start-Animationen, wählbare App-Symbole und ein Top Shelf mit „Weiter ansehen“ auf dem Apple TV, siehe [docs/start-symbole-top-shelf.md](docs/start-symbole-top-shelf.md)
 
-Als Nächstes: Intro überspringen und nächste Folge, Verteilung über TestFlight.
+Als Nächstes: Intro überspringen und nächste Folge.
 
 Den Player treibt [AetherEngine](https://github.com/superuser404notfound/AetherEngine) an (FFmpeg liest, VideoToolbox dekodiert, AVPlayer zeigt). Die Bedienung darüber ist die von Frames.
 
