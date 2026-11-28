@@ -55,9 +55,11 @@ jobs:
 
           Die App ist nicht von Apple beglaubigt. Beim ersten Start meldet macOS deshalb, dass sie nicht geöffnet werden kann. Dann unter Systemeinstellungen, Datenschutz & Sicherheit auf „Dennoch öffnen“ klicken. Das ist nur einmal nötig.
 
-          iPhone und iPad: `Frames-iOS-…-unsigniert.ipa` mit Sideloadly oder AltStore und der eigenen Apple-ID aufs Gerät spielen, das geht auch unter Windows. Mit einer kostenlosen Apple-ID läuft die App 7 Tage, dann einfach neu aufspielen.
+          iPhone und iPad: `Frames-iOS-${{ inputs.version }}-unsigniert.ipa` mit Sideloadly (Windows oder Mac) und der eigenen, auch kostenlosen Apple-ID aufspielen. Mit kostenloser Apple-ID läuft die App 7 Tage, dann neu aufspielen oder AltStore/SideStore automatisch erneuern lassen.
 
-          Apple TV: `Frames-tvOS-…-unsigniert.ipa` lässt sich mit Sideloadly aufspielen, wenn das Apple TV mit dem Rechner gekoppelt ist. Alternativ aus Xcode, siehe README.
+          Apple TV: `Frames-tvOS-${{ inputs.version }}-unsigniert.ipa`, verlässlich nur vom Mac aus (Sideloadly oder Xcode).
+
+          Schritt für Schritt: https://github.com/dconair/Frames/blob/main/docs/auf-geraet-installieren.md
           TEXT
           gh release create "v${{ inputs.version }}" "Frames-${{ inputs.version }}.dmg" \
             --target "${{ github.sha }}" \

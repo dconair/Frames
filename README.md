@@ -35,6 +35,10 @@ Den Player treibt [AetherEngine](https://github.com/superuser404notfound/AetherE
 | `App` | Der Einstiegspunkt der App. |
 | `project.yml` | Beschreibung des Xcode-Projekts für iOS, tvOS und macOS. |
 
+## Installieren
+
+Fertige Dateien für Mac, iPhone, iPad und Apple TV liegen unter [Releases](https://github.com/dconair/Frames/releases/latest). Wie sie mit einer kostenlosen Apple-ID auf die Geräte kommen, auch von Windows aus, steht in [docs/auf-geraet-installieren.md](docs/auf-geraet-installieren.md).
+
 ## Bauen
 
 Voraussetzungen: Xcode 27 oder neuer, Geräte ab iOS 18, tvOS 18 oder macOS 15, und [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
