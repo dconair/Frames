@@ -2,12 +2,13 @@
 import SwiftUI
 import FramesCore
 
-/// Einstellungen: Wiedergabe mit den Skip-Intervallen, darunter das Konto.
+/// Einstellungen: Wiedergabe mit den Skip-Intervallen, darunter Erscheinungsbild und Konto.
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         @Bindable var model = model
+        @Bindable var appearance = SignalAppearance.shared
         ScrollView {
             VStack(alignment: .leading, spacing: Signal.pt(10)) {
                 SignalPageHeader(eyebrow: "Einstellungen // Wiedergabe", title: "Wiedergabe")
@@ -22,13 +23,16 @@ struct SettingsView: View {
                 SettingRow("Bildvorschau beim Spulen", detail: "Vorschaubild mit Zeitmarke über der Zeitleiste") {
                     SignalSegments([(true, "AN"), (false, "AUS")], selection: $model.settings.scrubPreview)
                 }
-                SettingRow("Intro überspringen", detail: "Wenn ein Addon Intro-Marken liefert") {
+                SettingRow(
+                    "Intro und Rückblick überspringen",
+                    detail: "Taste: Einblendung zum Antippen · Auto: Taste füllt sich, nach \(EpisodeFlow.skipCountdown) Sekunden wird gesprungen"
+                ) {
                     SignalSegments(
                         [(IntroSkipMode.showButton, "TASTE"), (IntroSkipMode.automatic, "AUTO"), (IntroSkipMode.off, "AUS")],
                         selection: $model.settings.introSkip
                     )
                 }
-                SettingRow("Nächste Folge", detail: "Startet nach dem Abspann") {
+                SettingRow("Nächste Folge automatisch", detail: "Countdown von \(EpisodeFlow.countdown) Sekunden, sobald der Abspann läuft") {
                     SignalSegments([(true, "AN"), (false, "AUS")], selection: $model.settings.autoplayNextEpisode)
                 }
                 SettingRow("Höchste Auflösung", detail: "Größere Streams rücken nach hinten") {
@@ -40,6 +44,21 @@ struct SettingsView: View {
                 SettingRow("Dolby Vision bevorzugen", detail: "Wird bei „Abspielen“ zuerst gewählt") {
                     SignalSegments([(true, "AN"), (false, "AUS")], selection: $model.settings.preferDolbyVision)
                 }
+
+                SignalEyebrow("Einstellungen // Erscheinungsbild")
+                    .padding(.top, Signal.pt(40))
+                    .padding(.bottom, Signal.pt(8))
+
+                SettingRow("Farbthema", detail: "Farben der ganzen App") {
+                    SignalSegments(SignalColorTheme.allCases.map { ($0, $0.label) }, selection: $appearance.theme)
+                }
+                SettingRow("Schrift", detail: "Standard oder kantig wie auf einer Konsole") {
+                    SignalSegments(SignalTypeface.allCases.map { ($0, $0.label) }, selection: $appearance.typeface)
+                }
+
+                SpotifySettings()
+
+                StartSettingsSection()
 
                 SignalEyebrow("Einstellungen // Konto")
                     .padding(.top, Signal.pt(40))
@@ -68,6 +87,79 @@ struct SettingsView: View {
     private var syncText: String {
         guard let date = model.lastSync else { return "Noch nicht synchronisiert" }
         return "\(model.library.library.count) Titel · \(date.formatted(date: .omitted, time: .shortened))"
+    }
+}
+
+/// Spotify für das X-Ray: Songs aus dem Player landen in den eigenen Lieblingssongs.
+private struct SpotifySettings: View {
+    @State private var message: String?
+    #if !os(tvOS)
+    @Environment(\.webAuthenticationSession) private var webAuthenticationSession
+    #endif
+
+    var body: some View {
+        @Bindable var spotify = SpotifyAccount.shared
+        SignalEyebrow("Einstellungen // X-Ray und Spotify")
+            .padding(.top, Signal.pt(40))
+            .padding(.bottom, Signal.pt(8))
+
+        #if os(tvOS)
+        SettingRow("Spotify", detail: "Im X-Ray zeigt jeder Song einen QR-Code. Scannen öffnet ihn in Spotify auf dem Handy.") {
+            EmptyView()
+        }
+        #else
+        if spotify.isConnected {
+            SettingRow("Spotify", detail: "Verbunden. Ein Tipp im X-Ray legt den Song ab, Spotify bleibt zu.") {
+                Button("TRENNEN") { spotify.disconnect() }
+                    .buttonStyle(SignalButtonStyle())
+            }
+            SettingRow("Songs landen in", detail: "Die Playlist „Frames“ entsteht beim ersten Song, wie bei Shazam") {
+                SignalSegments(
+                    [(SpotifyDestination.playlist, "PLAYLIST FRAMES"), (SpotifyDestination.liked, "LIEBLINGSSONGS")],
+                    selection: $spotify.destination
+                )
+            }
+        } else {
+            SettingRow("Spotify-Client-ID", detail: "Aus deiner App auf developer.spotify.com") {
+                TextField("32 Zeichen", text: $spotify.clientId)
+                    .font(.signalMono(18))
+                    .foregroundStyle(Signal.Palette.text)
+                    .autocorrectionDisabled()
+                    .accessibilityIdentifier("spotify-client-id")
+                    #if os(iOS)
+                    .textInputAutocapitalization(.never)
+                    #endif
+                    #if os(macOS)
+                    .textFieldStyle(.plain)
+                    #endif
+                    .padding(.horizontal, Signal.pt(26))
+                    .frame(minWidth: 240, maxWidth: 420, minHeight: max(48, Signal.pt(72)))
+                    .signalPanel()
+            }
+            SettingRow("Mit Spotify verbinden", detail: "Redirect-URI in der Spotify-App: \(SpotifyClient.redirectURI)") {
+                Button(spotify.isConnecting ? "VERBINDET" : "VERBINDEN") {
+                    Task { message = await spotify.connect(using: webAuthenticationSession) }
+                }
+                .buttonStyle(SignalButtonStyle(.primary))
+                .disabled(spotify.isConnecting || !spotify.hasValidClientId)
+            }
+            Text(
+                "Ohne Verbindung öffnet ein Song aus dem X-Ray die Suche in Spotify. Zum Verbinden auf developer.spotify.com "
+                    + "eine App anlegen (Web API), die Redirect-URI oben eintragen und die Client-ID hier einfügen. "
+                    + "Spotify verlangt dafür ein Premium-Konto."
+            )
+            .font(.signal(18))
+            .foregroundStyle(Signal.Palette.textMuted)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, Signal.pt(26))
+        }
+        if let message {
+            Text(message)
+                .font(.signal(18, .medium))
+                .foregroundStyle(Signal.Palette.danger)
+                .padding(.horizontal, Signal.pt(26))
+        }
+        #endif
     }
 }
 

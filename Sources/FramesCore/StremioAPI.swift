@@ -72,6 +72,54 @@ public struct StremioAPI: Sendable {
         return try? JSONDecoder().decode(LibraryItem.self, from: data)
     }
 
+    /// Installiert ein Addon im Stremio-Konto, so wie es die Stremio-App tut. Danach kennen es alle Geräte.
+    ///
+    /// Die Liste wird dafür frisch geholt und unverändert zurückgeschrieben, nur um das neue Addon ergänzt.
+    /// Ein schon vorhandenes Addon mit derselben id wird an seinem Platz ersetzt, etwa nach einer neuen
+    /// Webtor-Adresse. Gibt das Manifest des installierten Addons zurück.
+    @discardableResult
+    public func installAddon(at transportURL: URL, authKey: String) async throws -> AddonManifest {
+        var request = URLRequest(url: transportURL)
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.timeoutInterval = 20
+        let response = try await http.send(request)
+        guard (200..<300).contains(response.status) else { throw FramesError.http(response.status) }
+        let manifest = try decodeJSON(AddonManifest.self, from: response.data)
+        guard let rawManifest = try? JSONSerialization.jsonObject(with: response.data) as? [String: Any] else {
+            throw FramesError.decoding("Manifest ist kein Objekt")
+        }
+        if manifest.needsConfiguration {
+            throw FramesError.api(code: nil, message: "Diese Adresse ist noch nicht eingerichtet. "
+                + "Richte das Addon auf seiner Seite ein und füge die persönliche Adresse ein, die du dort bekommst.")
+        }
+
+        let result = try await rawResult("addonCollectionGet", body: [
+            "type": "AddonCollectionGet", "authKey": authKey, "update": true,
+        ]) as? [String: Any]
+        // Ohne lesbare Liste wird nichts geschrieben: sonst gingen die vorhandenen Addons verloren.
+        guard var addons = result?["addons"] as? [[String: Any]], !addons.isEmpty else {
+            throw FramesError.decoding("Addon-Liste des Kontos nicht lesbar")
+        }
+        let entry: [String: Any] = [
+            "transportUrl": transportURL.absoluteString,
+            "transportName": "",
+            "manifest": rawManifest,
+            "flags": ["official": false, "protected": false],
+        ]
+        if addons.contains(where: { $0["transportUrl"] as? String == transportURL.absoluteString }) {
+            return manifest
+        }
+        if let index = addons.firstIndex(where: { ($0["manifest"] as? [String: Any])?["id"] as? String == manifest.id }) {
+            addons[index] = entry
+        } else {
+            addons.append(entry)
+        }
+        _ = try await rawResult("addonCollectionSet", body: [
+            "type": "AddonCollectionSet", "authKey": authKey, "addons": addons,
+        ])
+        return manifest
+    }
+
     private func post(_ method: String, body: [String: Any]) async throws -> Data {
         var request = URLRequest(url: baseURL.appendingPathComponent(method))
         request.httpMethod = "POST"

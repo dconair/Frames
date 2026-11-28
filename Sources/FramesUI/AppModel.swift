@@ -1,6 +1,9 @@
 #if canImport(SwiftUI)
 import SwiftUI
 import FramesCore
+#if os(tvOS)
+import TVServices
+#endif
 
 /// Zustand der ganzen App: Anmeldung, Addons, Bibliothek, Einstellungen.
 @MainActor
@@ -20,6 +23,8 @@ public final class AppModel {
     /// Solange der Player läuft, gehört ihm der ganze Bildschirm: Seitenleiste und untere Leiste weichen.
     public var isPlayerActive = false
     public var settings: PlaybackSettings
+    /// Ein Titel, den ein Link von außen öffnen soll, etwa aus dem Top Shelf auf dem Apple TV.
+    var deepLink: DeepLinkTarget?
 
     public let content: ContentService
     private let api: StremioAPI
@@ -36,6 +41,9 @@ public final class AppModel {
         self.content = content
         self.store = store
         self.settings = store.loadSettings()
+        if TestHooks.playsEpisodes {
+            settings.introSkip = TestHooks.autoSkip ? .automatic : .showButton
+        }
     }
 
     /// Beim Start: gespeicherte Sitzung wieder aufnehmen und Addons laden.
@@ -88,6 +96,7 @@ public final class AppModel {
         session = nil
         addons = []
         library = []
+        syncTopShelf()
         lastSync = nil
         phase = .loggedOut
         if let key {
@@ -108,6 +117,7 @@ public final class AppModel {
             async let loadedLibrary = Self.loadLibrary(api, authKey: key)
             addons = try await loadedAddons
             library = await loadedLibrary ?? library
+            syncTopShelf()
             lastSync = Date()
             errorMessage = nil
         } catch FramesError.api(let code, let message) where code == 1 {
@@ -134,9 +144,78 @@ public final class AppModel {
         } else {
             library.append(saved)
         }
+        syncTopShelf()
+    }
+
+    /// Öffnet, was ein Link wie `frames://detail?type=movie&id=tt123` meint.
+    public func open(_ url: URL) {
+        guard let target = DeepLinkTarget(url: url, library: library) else { return }
+        deepLink = target
+    }
+
+    // MARK: Top Shelf
+
+    #if os(tvOS)
+    private var topShelfBackgrounds: [String: URL] = [:]
+    private var topShelfTask: Task<Void, Never>?
+    #endif
+
+    /// Schreibt den Stand von „Weiter ansehen“ für die Top-Shelf-Erweiterung auf dem Apple TV.
+    /// Breite Bilder holt sie sich einmal je Titel bei den Addons. Auf den anderen Geräten tut das nichts.
+    private func syncTopShelf() {
+        #if os(tvOS)
+        topShelfTask?.cancel()
+        let library = library, addons = addons, content = content
+        var backgrounds = topShelfBackgrounds
+        topShelfTask = Task { [weak self] in
+            let wanted = TopShelfSnapshot.entries(from: library)
+            for entry in wanted where backgrounds[entry.id] == nil {
+                if Task.isCancelled { return }
+                if let meta = try? await content.meta(type: entry.type, id: entry.id, addons: addons),
+                   let background = meta.background {
+                    backgrounds[entry.id] = background
+                }
+            }
+            if Task.isCancelled { return }
+            self?.topShelfBackgrounds = backgrounds
+            let snapshot = TopShelfSnapshot(entries: TopShelfSnapshot.entries(from: library, backgrounds: backgrounds))
+            if snapshot.write() {
+                TVTopShelfContentProvider.topShelfContentDidChange()
+            }
+        }
+        #endif
+    }
+
+    /// Installiert ein Addon über seine Adresse im Stremio-Konto. Gibt den Namen zurück, wenn es geklappt hat.
+    /// Die Adresse selbst taucht in keiner Meldung auf: sie trägt oft einen persönlichen Schlüssel.
+    public func installAddon(address: String) async -> Result<String, AddonInstallFailure> {
+        guard let url = AddonAddress.normalize(address) else {
+            return .failure(.init("Das ist keine Addon-Adresse. Sie beginnt mit https:// und endet auf /manifest.json."))
+        }
+        guard let key = session?.authKey else {
+            return .failure(.init("Melde dich erst mit deinem Stremio-Konto an."))
+        }
+        isBusy = true
+        let api = api
+        let result: Result<String, AddonInstallFailure>
+        do {
+            let manifest = try await api.installAddon(at: url, authKey: key)
+            result = .success(manifest.name)
+        } catch FramesError.http(let status) where status == 401 || status == 403 || status == 404 {
+            result = .failure(.init("Unter dieser Adresse antwortet kein Addon. Ist sie vollständig und noch gültig?"))
+        } catch FramesError.decoding {
+            result = .failure(.init("Unter dieser Adresse liegt kein Stremio-Addon."))
+        } catch {
+            result = .failure(.init(Self.describe(error)))
+        }
+        isBusy = false
+        if case .success = result { await refresh() }
+        return result
     }
 
     public func saveSettings() {
+        // Der Test mit der Beispielliste soll keine Filter hinterlassen, die spätere Läufe einengen.
+        guard TestHooks.sampleStreams == nil else { return }
         store.saveSettings(settings)
     }
 
@@ -146,10 +225,18 @@ public final class AppModel {
     }
 
     private static func describe(_ error: Error) -> String {
+        if let error = error as? FramesError, error.requiresPasswordReset {
+            return "Stremio verlangt ein neues Passwort. Setze es auf stremio.com zurück und melde dich dann neu an."
+        }
         if case FramesError.api(let code, _) = error, code == 2 || code == 3 {
             return "E-Mail oder Passwort stimmen nicht."
         }
         return (error as? LocalizedError)?.errorDescription ?? "Das hat nicht geklappt."
     }
+}
+
+public struct AddonInstallFailure: Error, Equatable {
+    public let message: String
+    init(_ message: String) { self.message = message }
 }
 #endif

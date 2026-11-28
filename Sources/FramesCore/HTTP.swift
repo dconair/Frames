@@ -23,6 +23,14 @@ public enum FramesError: Error, Equatable, LocalizedError {
     }
 }
 
+extension FramesError {
+    /// Stremio sperrt die Anmeldung, bis das Passwort auf stremio.com neu gesetzt ist.
+    public var requiresPasswordReset: Bool {
+        guard case .api(_, let message) = self else { return false }
+        return message.lowercased().contains("password needs to be reset")
+    }
+}
+
 public struct HTTPResponse: Sendable {
     public let status: Int
     public let data: Data

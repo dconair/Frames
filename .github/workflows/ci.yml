@@ -48,4 +48,8 @@ jobs:
           -scheme Frames
           -destination "${{ matrix.destination }}"
           -skipPackagePluginValidation
+          -derivedDataPath build
           CODE_SIGNING_ALLOWED=NO
+      - name: Mac-App prüfen (Frameworks und Icon im Paket)
+        if: matrix.name == 'macOS'
+        run: scripts/pruefe-mac-app.sh build/Build/Products/Debug/Frames.app

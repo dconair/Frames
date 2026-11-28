@@ -59,6 +59,10 @@ if hasAccount, let email = environment["FRAMES_EMAIL"], let password = environme
         let session = try await api.login(email: email, password: password)
         authKey = session.authKey
         ok("Anmeldung angenommen, Sitzungsschlüssel erhalten")
+    } catch let error as FramesError where error.requiresPasswordReset {
+        // Kein Fehler von Frames: Stremio sperrt das Konto bis zum neuen Passwort. Weiter mit der Grundausstattung.
+        warn("Stremio verlangt für das Test-Konto ein neues Passwort. Danach das Secret FRAMES_PASSWORD aktualisieren. "
+            + "Geprüft wird bis dahin die Grundausstattung.")
     } catch {
         fail("Anmeldung: \(error.localizedDescription)")
     }
@@ -197,11 +201,41 @@ for item in ranked.prefix(5) {
     note("\(alias(item.addonName)): \(badges.isEmpty ? "ohne Technik-Angaben" : badges)")
 }
 
+let byService = Dictionary(grouping: ranked, by: { $0.info.service?.name ?? "ohne erkannten Dienst" }).mapValues(\.count)
+if !ranked.isEmpty {
+    note("Abspielbar nach Dienst: " + byService.sorted { $0.key < $1.key }.map { "\($0.value) × \($0.key)" }.joined(separator: ", "))
+}
+
+// MARK: Webtor
+
+if let webtor = addons.first(where: Webtor.isWebtor) {
+    step("Webtor")
+    if !Webtor.isSignedIn(webtor) {
+        warn("Das Webtor-Addon ist ohne persönliche Adresse installiert und liefert so nichts. "
+            + "Im Webtor-Profil „Generate addon URL“ wählen und die Adresse in Frames unter Addons einfügen.")
+    } else {
+        let own = ranked.filter { Webtor.isResolveLink($0.stream.url ?? URL(fileURLWithPath: "/")) }
+        ok("Das Webtor-Addon ist eingerichtet und liefert \(own.count) abspielbare Streams für diesen Titel.")
+        if let first = own.first, let url = first.stream.playableURL {
+            switch await StreamLinkResolver().resolve(url, headers: first.stream.requestHeaders) {
+            case .play(let target) where target != url:
+                ok("Webtor leitet zur Datei weiter. Der Player bekommt die Adresse der Datei.")
+            case .play:
+                note("Webtor hat auf die Nachfrage nicht mit einer Weiterleitung geantwortet. Der Player versucht es dann selbst.")
+            case .blocked(let message):
+                warn("Webtor gibt den ersten Stream nicht frei: \(message)")
+            }
+        }
+    }
+}
+
 // MARK: Abruf wie im Player
 
 if let best = ranked.first, let url = best.stream.playableURL {
     step("Abruf des besten Links")
-    var request = URLRequest(url: url)
+    var target = url
+    if case .play(let resolved) = await StreamLinkResolver().resolve(url, headers: best.stream.requestHeaders) { target = resolved }
+    var request = URLRequest(url: target)
     request.setValue("bytes=0-1023", forHTTPHeaderField: "Range")
     for (name, value) in best.stream.requestHeaders { request.setValue(value, forHTTPHeaderField: name) }
     request.timeoutInterval = 30
@@ -237,6 +271,33 @@ if let best = ranked.first, let url = best.stream.playableURL {
 } else if authKey != nil {
     step("Abruf des besten Links")
     fail("Kein direkter Link für \(streamId). Liefert dein Debrid-Addon für diesen Titel Streams?")
+}
+
+// MARK: X-Ray
+
+// Feste, bekannte Titel, damit die Ausgabe nichts über das Konto verrät.
+step("X-Ray: Besetzung und Musik")
+let xraySeries = XRayRequest(metaId: "tt0903747", type: "series", name: "Breaking Bad", videoId: "tt0903747:2:3")
+let seriesCast = await CastService().cast(for: xraySeries)
+if seriesCast.count >= 5, seriesCast.contains(where: \.isGuest), seriesCast.contains(where: { $0.photo != nil }) {
+    ok("Serie: \(seriesCast.count) Personen, \(seriesCast.filter(\.isGuest).count) Gäste der Folge, z. B. \(seriesCast[0].name) als \(seriesCast[0].character ?? "?")")
+} else {
+    fail("Serie: Besetzung von TVmaze unvollständig (\(seriesCast.count) Personen)")
+}
+let xrayMovie = XRayRequest(
+    metaId: "tt15398776", type: "movie", name: "Oppenheimer", year: 2023,
+    castNames: ["Cillian Murphy", "Emily Blunt", "Matt Damon", "Robert Downey Jr."]
+)
+let movieCast = await CastService().cast(for: xrayMovie)
+let withPhotos = movieCast.filter { $0.photo != nil }.count
+if withPhotos >= 2 { ok("Film: \(withPhotos) von \(movieCast.count) Namen mit Foto") } else { fail("Film: nur \(withPhotos) Fotos gefunden") }
+for request in [xraySeries, xrayMovie] {
+    let albums = (try? await SoundtrackService().soundtracks(for: request)) ?? []
+    if let first = albums.first, let track = first.tracks.first {
+        ok("\(request.name): \(albums.count) Album/Alben, \(first.title) mit \(first.tracks.count) Stücken, z. B. „\(track.title)“ von \(track.artist)")
+    } else {
+        fail("\(request.name): kein Soundtrack bei MusicBrainz gefunden")
+    }
 }
 
 if failures == 0, warnings > 0 {

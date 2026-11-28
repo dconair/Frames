@@ -15,10 +15,14 @@ Lauffähig von der Anmeldung bis zur Wiedergabe:
 - Quellenliste mit Technik-Badges (Auflösung, Bild, Ton, Größe), beste Quelle zuerst
 - Eigener Player auf allen Geräten: MKV und praktisch jedes andere Format, Dolby Vision, HDR10+ und Atmos über die Wege des Systems, Tonspuren, Untertitel
 - Skip mit getrennt einstellbaren Intervallen für vor und zurück (5, 10, 20 Sekunden)
+- Rückblick und Intro überspringen, per Taste oder automatisch: die Taste füllt sich wie bei Netflix, nach 5 Sekunden wird gesprungen. Die Zeitmarken kommen aus [IntroDB](https://introdb.app) und [TheIntroDB](https://theintrodb.org) (Serien mit IMDb-Nummer), aus [AniSkip](https://aniskip.com) (Anime aus Kitsu-Katalogen) und sonst aus Kapiteln der Datei, die „Intro“, „Opening“ oder „Abspann“ heißen
+- Nächste Folge: sobald der Abspann läuft, erscheint eine Karte mit 10 Sekunden Countdown. Die Quelle der nächsten Folge sucht Frames selbst aus, bevorzugt aus derselben Reihe (`bingeGroup`) und vom selben Addon
+- Folgenliste im Player: Staffeln und Folgen durchblättern und direkt wechseln
 - Bildvorschau beim Spulen, aus den schon geladenen Daten und ohne zweite Verbindung zum Debrid-Dienst
+- X-Ray im Player: beim Pausieren die ersten Gesichter, über die Taste X-RAY Besetzung mit Fotos und Rollen (bei Serien mit den Gaststars der Folge) und der Soundtrack des Titels. Songs mit Albumcover. Mit verbundenem Spotify-Konto legt ein Tipp den Song in die eigene Playlist „Frames“ (oder in die Lieblingssongs), ohne Spotify zu öffnen. Ohne Verbindung öffnet er Spotify, auf dem Apple TV per QR-Code
 - Wiedergabestand geht zurück ins Stremio-Konto, die Wiedergabe setzt dort fort, wo sie auf einem anderen Gerät endete
 
-Als Nächstes: Intro überspringen und nächste Folge, App-Icon, Verteilung über TestFlight.
+- Acht wechselnde Start-Animationen, wählbare App-Symbole und ein Top Shelf mit „Weiter ansehen“ auf dem Apple TV, siehe [docs/start-symbole-top-shelf.md](docs/start-symbole-top-shelf.md)
 
 Den Player treibt [AetherEngine](https://github.com/superuser404notfound/AetherEngine) an (FFmpeg liest, VideoToolbox dekodiert, AVPlayer zeigt). Die Bedienung darüber ist die von Frames.
 
@@ -31,6 +35,10 @@ Den Player treibt [AetherEngine](https://github.com/superuser404notfound/AetherE
 | `App` | Der Einstiegspunkt der App. |
 | `project.yml` | Beschreibung des Xcode-Projekts für iOS, tvOS und macOS. |
 
+## Installieren
+
+Fertige Dateien für Mac, iPhone, iPad und Apple TV liegen unter [Releases](https://github.com/dconair/Frames/releases/latest). Wie sie mit einer kostenlosen Apple-ID auf die Geräte kommen, auch von Windows aus, steht in [docs/auf-geraet-installieren.md](docs/auf-geraet-installieren.md).
+
 ## Bauen
 
 Voraussetzungen: Xcode 27 oder neuer, Geräte ab iOS 18, tvOS 18 oder macOS 15, und [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
@@ -40,7 +48,7 @@ xcodegen generate
 open Frames.xcodeproj
 ```
 
-In Xcode das Ziel „Frames“ wählen, ein Gerät aussuchen (iPhone, iPad, Apple TV oder „My Mac“) und starten. Für ein echtes Gerät unter „Signing & Capabilities“ das eigene Team eintragen.
+In Xcode das Ziel „Frames“ wählen, ein Gerät aussuchen (iPhone, iPad, Apple TV oder „My Mac“) und starten. Für ein echtes Gerät unter „Signing & Capabilities“ das eigene Team eintragen. Die ausführliche Anleitung mit kostenloser Apple-ID steht in [docs/auf-geraet-installieren.md](docs/auf-geraet-installieren.md).
 
 Tests des Kerns:
 
@@ -55,6 +63,18 @@ swift test
 - „Simulator-Tests“ startet die App im iPhone- und im Apple-TV-Simulator, bedient sie, spielt ein Testvideo im Player und legt Bildschirmfotos als Paket am Lauf ab.
 
 Die Zugangsdaten liegen als Secrets `FRAMES_EMAIL` und `FRAMES_PASSWORD` im Repo. In Protokollen stehen weder Links noch Titel aus dem Konto.
+
+## X-Ray und Spotify
+
+Besetzung kommt von [TVmaze](https://www.tvmaze.com/api) (CC BY-SA), der Soundtrack von [MusicBrainz](https://musicbrainz.org), die Cover aus dem [Cover Art Archive](https://coverartarchive.org). Mit Spotify-Verbindung zeigt jeder Song das Cover seines Originalalbums. Beide ohne Schlüssel. Wer in genau dieser Szene spielt oder welcher Song gerade läuft, gibt es als freie Quelle nicht. Das X-Ray zeigt deshalb Besetzung und Soundtrack des Titels.
+
+Ohne Einrichtung öffnet ein Song die Suche in Spotify. Damit Songs mit einem Tipp in der Playlist „Frames“ landen, wie bei Shazam:
+
+1. Auf [developer.spotify.com](https://developer.spotify.com/dashboard) eine App anlegen, API „Web API“. Spotify verlangt dafür ein Premium-Konto.
+2. Als Redirect-URI `http://127.0.0.1:43821/spotify` eintragen.
+3. Die Client-ID in Frames unter Einstellungen › X-Ray und Spotify einfügen und „Verbinden“ wählen.
+
+Frames nimmt den Rücksprung von Spotify kurz auf 127.0.0.1 an, der Code verlässt das Gerät nicht. Ein Geheimnis braucht die App dank PKCE nicht. Auf dem Apple TV gibt es keinen Browser für die Anmeldung, dort zeigt jeder Song einen QR-Code fürs Handy.
 
 ## Hinweise
 

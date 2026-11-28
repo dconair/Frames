@@ -10,12 +10,17 @@ struct PlayerView: View {
     @Environment(AppModel.self) private var model
     @State private var session: PlayerSession?
     @State private var engineFailed = false
+    /// Die Folge, die gerade läuft. Wechselt, wenn die nächste Folge startet oder eine aus der Liste gewählt wird.
+    @State private var current: PlayerRoute?
+    @State private var flow = EpisodeFlow()
+
+    private var playing: PlayerRoute { current ?? route }
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
             if let session {
-                PlayerStage(route: route, session: session)
+                PlayerStage(route: playing, session: session, flow: flow)
             } else if engineFailed {
                 SignalNotice("Wiedergabe nicht möglich", detail: "Der Player ließ sich auf diesem Gerät nicht starten.")
             }
@@ -33,36 +38,55 @@ struct PlayerView: View {
             }
             let newSession = PlayerSession(engine: engine)
             session = newSession
+            flow.isPlaying = { [weak newSession] in newSession?.isPlaying ?? false }
+            flow.onPlay = { next in Task { await switchEpisode(to: next) } }
+            flow.onSkip = { [weak newSession] segment, announce in
+                guard let newSession else { return }
+                newSession.jump(to: segment.end(duration: newSession.duration), flash: announce ? segment.kind.skippedLabel : nil)
+            }
             let resume = model.resumePosition(metaId: route.item.metaId, videoId: route.item.videoId)
             await newSession.start(route, settings: model.settings, resumeAt: resume)
         }
         .onAppear { model.isPlayerActive = true }
         .onDisappear {
             model.isPlayerActive = false
+            flow.stop()
             guard let session else { return }
-            let progress = session.progress(for: route.item)
+            let progress = session.progress(for: playing.item)
             session.stop()
             Task { await model.saveProgress(progress) }
         }
+    }
+
+    /// Spielt eine andere Folge im selben Player, ohne zurück zur Quellenliste.
+    private func switchEpisode(to next: PlayerRoute) async {
+        guard let session else { return }
+        let progress = session.progress(for: playing.item)
+        Task { await model.saveProgress(progress) }
+        current = next
+        let resume = model.resumePosition(metaId: next.item.metaId, videoId: next.item.videoId)
+        await session.start(next, settings: model.settings, resumeAt: resume)
     }
 }
 
 private struct PlayerStage: View {
     let route: PlayerRoute
     let session: PlayerSession
+    let flow: EpisodeFlow
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var controlsVisible = true
     @State private var panel: Panel?
     @State private var hideTask: Task<Void, Never>?
+    @State private var xray = XRayModel()
     @FocusState private var focus: FocusTarget?
 
     private enum Panel {
-        case audio, subtitles
+        case audio, subtitles, xray, episodes
     }
 
     private enum FocusTarget: Hashable {
-        case surface, tracks
+        case surface, tracks, xray, episodes, segmentSkip, nextEpisode
     }
 
     var body: some View {
@@ -86,12 +110,25 @@ private struct PlayerStage: View {
                 controls.transition(.opacity)
             }
 
-            if let panel {
+            episodeOverlay
+
+            if panel == .xray {
+                XRayPanel(model: xray, title: route.item.subtitle.map { "\(route.item.name) · \($0)" } ?? route.item.name) {
+                    closePanel()
+                }
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else if panel == .episodes {
+                EpisodesPanel(flow: flow, onSelect: { video in
+                    closePanel()
+                    flow.play(video: video, settings: model.settings)
+                }, onClose: closePanel)
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else if let panel {
                 trackPanel(panel)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
 
-            if TestHooks.video != nil {
+            if TestHooks.video != nil || TestHooks.sampleStreams != nil {
                 // Daran lesen die Simulator-Tests ab, ob Bild und Zeit wirklich laufen.
                 Color.clear
                     .frame(width: 1, height: 1)
@@ -99,7 +136,10 @@ private struct PlayerStage: View {
                     .accessibilityIdentifier("player-status")
                     .accessibilityLabel(
                         "bild=\(session.hasPicture) spielt=\(session.isPlaying) zeit=\(Int(session.time)) "
-                            + "dauer=\(Int(session.duration)) fehler=\(session.failure ?? "-")"
+                            + "dauer=\(Int(session.duration)) fehler=\(session.failure ?? "-") "
+                            + "folge=\(route.item.videoId) taste=\(flow.activeSkip?.kind.rawValue ?? "-") "
+                            + "zaehler=\(flow.skipRemaining.map(String.init) ?? "-") "
+                            + "karte=\(flow.card.map { String(describing: $0) } ?? "-") folgen=\(flow.meta?.videos.count ?? 0)"
                     )
             }
         }
@@ -109,6 +149,38 @@ private struct PlayerStage: View {
             focus = .surface
             scheduleHide()
         }
+        // Besetzung und Musik schon beim Start laden, damit das X-Ray beim Pausieren sofort da ist.
+        .task { await xray.load(route.item.xrayRequest) }
+        // Zeitmarken und Folgenliste für jede Folge neu, auch wenn die nächste im selben Player startet.
+        .task(id: route.item.videoId) { await flow.load(route, model: model) }
+        .onChange(of: session.time) { _, time in
+            flow.update(
+                time: time, duration: session.duration, isScrubbing: session.scrubTime != nil, settings: model.settings
+            )
+        }
+        .onChange(of: session.chapters) { _, chapters in flow.useChapters(chapters) }
+        .onChange(of: session.hasEnded) { _, ended in
+            if ended { flow.playbackEnded(settings: model.settings) }
+        }
+        #if os(tvOS)
+        // Erscheint „Intro überspringen“ oder die Karte zur nächsten Folge, liegt der Fokus darauf wie bei Netflix.
+        .onChange(of: flow.activeSkip) { _, segment in
+            // Die Taste bekommt den Fokus auch bei eingeblendeter Bedienung, sonst pausiert „Auswählen“ nur.
+            // Wer schon auf einer Taste unten steht, behält seinen Fokus.
+            if segment != nil, panel == nil, focus == .surface || focus == nil {
+                focusSoon(.segmentSkip)
+            } else if segment == nil, focus == .segmentSkip {
+                focus = .surface
+            }
+        }
+        .onChange(of: flow.card) { old, card in
+            if card != nil, old == nil, panel == nil {
+                focusSoon(.nextEpisode)
+            } else if card == nil, focus == .nextEpisode {
+                focus = .surface
+            }
+        }
+        #endif
         .onChange(of: session.isPlaying) { _, isPlaying in
             if isPlaying {
                 scheduleHide()
@@ -129,6 +201,9 @@ private struct PlayerStage: View {
         .onExitCommand {
             if panel != nil {
                 panel = nil
+                focus = .surface
+            } else if flow.card != nil, flow.card != .loading {
+                flow.dismissCard()
                 focus = .surface
             } else if controlsVisible, session.isPlaying {
                 controlsVisible = false
@@ -169,6 +244,11 @@ private struct PlayerStage: View {
             switch direction {
             case .left: skip(.backward)
             case .right: skip(.forward)
+            case .down:
+                // Die Fläche füllt den ganzen Bildschirm, darunter liegt für die Fokus-Steuerung nichts.
+                // Deshalb führt „runter“ ausdrücklich zu den Tasten unten: bei Serien zuerst zu den Folgen, sonst zum X-Ray, sonst zu Ton und Untertitel.
+                showControls()
+                focusSoon(flow.isSeries ? .episodes : (xray.isEmpty ? .tracks : .xray))
             default: showControls()
             }
         }
@@ -241,6 +321,13 @@ private struct PlayerStage: View {
             Spacer(minLength: 0)
             #endif
 
+            if !session.isPlaying, session.hasPicture, panel == nil {
+                XRayTeaser(model: xray)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.bottom, Signal.pt(20))
+                    .transition(.opacity.combined(with: .move(edge: .leading)))
+            }
+
             if let flash = session.flash {
                 Text(flash)
                     .font(.signalMono(26, .bold))
@@ -260,6 +347,22 @@ private struct PlayerStage: View {
                     .foregroundStyle(Signal.Palette.textMuted)
                 #endif
                 Spacer(minLength: 0)
+                if flow.isSeries {
+                    Button("FOLGEN") { open(.episodes) }
+                        .buttonStyle(SignalButtonStyle())
+                        .focused($focus, equals: .episodes)
+                        .accessibilityIdentifier("episodes-button")
+                }
+                if flow.next != nil {
+                    Button("NÄCHSTE FOLGE  »") { flow.playNext(settings: model.settings) }
+                        .buttonStyle(SignalButtonStyle())
+                }
+                if !xray.isEmpty {
+                    Button("X-RAY") { openXRay() }
+                        .buttonStyle(SignalButtonStyle())
+                        .focused($focus, equals: .xray)
+                        .accessibilityIdentifier("xray-button")
+                }
                 if session.audioTracks.count > 1 {
                     Button("TON") { open(.audio) }
                         .buttonStyle(SignalButtonStyle())
@@ -319,12 +422,8 @@ private struct PlayerStage: View {
                     .padding(Signal.pt(10))
                 }
                 .scrollClipDisabled()
-                Button("SCHLIESSEN") {
-                    panel = nil
-                    focus = .surface
-                    scheduleHide()
-                }
-                .buttonStyle(SignalButtonStyle())
+                Button("SCHLIESSEN") { closePanel() }
+                    .buttonStyle(SignalButtonStyle())
             }
             .padding(Signal.pt(32))
             .frame(width: max(300, Signal.pt(620)))
@@ -371,6 +470,85 @@ private struct PlayerStage: View {
         panel = kind
     }
 
+    /// Wie bei Prime Video hält das X-Ray den Film an.
+    private func openXRay() {
+        if session.isPlaying { session.togglePlay() }
+        open(.xray)
+    }
+
+    /// Setzt den Fokus, sobald das Ziel gezeichnet ist. Direkt beim Einblenden greift er auf dem Fernseher noch nicht.
+    /// Während die Taste noch hereinfährt, nimmt der Fernseher den Fokus manchmal nicht an, daher ein paar Versuche.
+    private func focusSoon(_ target: FocusTarget) {
+        Task { @MainActor in
+            for _ in 0..<6 {
+                try? await Task.sleep(for: .milliseconds(200))
+                guard focus != target else { return }
+                focus = target
+            }
+        }
+    }
+
+    private func closePanel() {
+        panel = nil
+        focus = .surface
+        scheduleHide()
+    }
+
+    // MARK: Folgen
+
+    /// Unten rechts: „Intro überspringen“ und im Abspann die Karte zur nächsten Folge.
+    /// Beides steht auch ohne eingeblendete Bedienung und rückt nach oben, solange die Zeitleiste zu sehen ist.
+    private var episodeOverlay: some View {
+        VStack(alignment: .trailing, spacing: Signal.pt(16)) {
+            Spacer(minLength: 0)
+            if !controlsVisible, let flash = session.flash {
+                Text(flash)
+                    .font(.signalMono(22, .bold))
+                    .foregroundStyle(Signal.Palette.lime)
+                    .shadow(color: .black.opacity(0.8), radius: 8)
+                    .transition(.opacity)
+            }
+            if flow.card != nil {
+                NextEpisodeCard(flow: flow, onPlay: {
+                    flow.playNext(settings: model.settings)
+                }, onDismiss: {
+                    flow.dismissCard()
+                    focus = .surface
+                })
+                .focused($focus, equals: .nextEpisode)
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else if let segment = flow.activeSkip, panel == nil {
+                SkipSegmentButton(segment: segment, progress: flow.skipProgress) {
+                    flow.skip(segment)
+                    focus = .surface
+                }
+                .focused($focus, equals: .segmentSkip)
+                #if os(tvOS)
+                .onMoveCommand { direction in
+                    switch direction {
+                    case .left: skip(.backward)
+                    case .right: skip(.forward)
+                    case .down:
+                        // Wie auf der Bildfläche: runter führt zu den Tasten unten.
+                        showControls()
+                        focusSoon(flow.isSeries ? .episodes : (xray.isEmpty ? .tracks : .xray))
+                    default:
+                        focus = .surface
+                        showControls()
+                    }
+                }
+                #endif
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+        .padding(.horizontal, max(20, Signal.pt(80)))
+        .padding(.bottom, controlsVisible ? Signal.pt(250) : max(24, Signal.pt(80)))
+        .animation(Signal.Motion.sheet, value: controlsVisible)
+        .animation(Signal.Motion.sheet, value: flow.activeSkip)
+        .animation(Signal.Motion.sheet, value: flow.card)
+    }
+
     private func showControls() {
         controlsVisible = true
         scheduleHide()
@@ -383,7 +561,8 @@ private struct PlayerStage: View {
             try? await Task.sleep(for: .seconds(4))
             guard !Task.isCancelled, session.isPlaying, panel == nil, session.scrubTime == nil else { return }
             controlsVisible = false
-            focus = .surface
+            // Taste und Karte bleiben stehen, wenn die Bedienung verschwindet, ihr Fokus also auch.
+            if focus != .segmentSkip, focus != .nextEpisode { focus = .surface }
         }
     }
 }

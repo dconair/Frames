@@ -58,6 +58,68 @@ final class FramesUITests: XCTestCase {
         }
     }
 
+    // MARK: Sortieren und Filtern
+
+    /// Öffnet die Quellenliste mit einer festen Beispielliste, sortiert nach Bitrate, filtert auf 1080p und Webtor
+    /// und spielt die erste verbliebene Quelle. Die Beispielzeilen führen alle auf ein frei verfügbares Testvideo.
+    func testQuellenSortierenUndFiltern() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-frames-gast", "-frames-beispielquellen"]
+        app.launch()
+        XCTAssertTrue(waitForContent(in: app, seconds: 60), "Auf Home sind keine Kataloge erschienen.")
+        sleep(4)
+        openFirstTitle(in: app)
+        sleep(5)
+        let play = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'ABSPIELEN'")).firstMatch
+        XCTAssertTrue(play.waitForExistence(timeout: 20), "Auf der Detailseite fehlt „Abspielen“.")
+        activate(play, in: app)
+
+        let toggle = app.buttons["quellen-filter"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 20), "Über der Quellenliste fehlt „Sortieren & Filtern“.")
+        let state = app.staticTexts["quellen-stand"]
+        sleep(3)
+        snap("30-Quellen")
+        print("FRAMES-UI Filter vorher: \(state.label)")
+        XCTAssertTrue(state.label.contains("10 QUELLEN"), "Die Beispielliste ist nicht vollständig: \(state.label)")
+
+        openFilters(toggle, in: app)
+        sleep(2)
+        snap("31-Filter-offen")
+        let choices = [
+            ("BITRATE", ["BESTE ZUERST", "BITRATE", "KLEINSTE", "TON", "FASSUNG"]),
+            ("1080p", ["2160p", "1080p", "720p"]),
+            ("WEBTOR", ["RD", "WEBTOR"]),
+        ]
+        for (step, (label, row)) in choices.enumerated() {
+            let found = choose(label, among: row, in: app)
+            XCTAssertTrue(found, "Die Auswahl „\(label)“ ließ sich nicht treffen.")
+            sleep(2)
+            snap("3\(step + 2)-Filter-\(label)")
+            print("FRAMES-UI Filter nach \(label): \(state.label)")
+        }
+        XCTAssertTrue(state.label.contains("BITRATE"), "Die Sortierung steht nicht im Stand: \(state.label)")
+        XCTAssertTrue(state.label.contains("2 FILTER"), "Die Filter stehen nicht im Stand: \(state.label)")
+        XCTAssertTrue(state.label.contains("2 VON 10 QUELLEN"), "1080p von Webtor sind genau zwei Zeilen: \(state.label)")
+
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Webtor.io'")).firstMatch
+        XCTAssertTrue(row.exists, "Nach dem Filtern fehlt die Webtor-Zeile.")
+        print("FRAMES-UI Filter erste Zeile: \(row.label)")
+        XCTAssertTrue(row.label.contains("6,4 GB"), "Mit Sortierung nach Bitrate steht die größere Datei oben: \(row.label)")
+        openRow(row, in: app)
+
+        let status = app.descendants(matching: .any)["player-status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 30), "Der Player ist nicht erschienen.")
+        var hasPicture = false
+        for _ in 0..<60 where !hasPicture {
+            hasPicture = status.label.contains("bild=true")
+            if !hasPicture { sleep(1) }
+        }
+        print("FRAMES-UI Filter Player: \(status.label)")
+        XCTAssertTrue(hasPicture, "Die gefilterte Quelle spielt nicht: \(status.label)")
+        sleep(4)
+        snap("35-Player-aus-gefilterter-Liste")
+    }
+
     // MARK: Echtes Konto
 
     /// Meldet sich mit dem Konto aus den Secrets an. Es werden weder Bilder noch Titel festgehalten.
@@ -72,6 +134,7 @@ final class FramesUITests: XCTestCase {
         app.launch()
 
         let loaded = waitForContent(in: app, seconds: 90)
+        try skipIfPasswordResetRequired(in: app, loaded: loaded)
         let stillAtLogin = app.staticTexts["Mit Stremio anmelden"].exists
         XCTAssertFalse(stillAtLogin, "Die App steht nach der Anmeldung noch auf der Anmeldeseite.")
         XCTAssertTrue(loaded, "Nach der Anmeldung sind keine Kataloge erschienen.")
@@ -97,7 +160,9 @@ final class FramesUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment = ["FRAMES_TEST_EMAIL": email, "FRAMES_TEST_PASSWORD": password]
         app.launch()
-        XCTAssertTrue(waitForContent(in: app, seconds: 90), "Nach der Anmeldung sind keine Kataloge erschienen.")
+        let loaded = waitForContent(in: app, seconds: 90)
+        try skipIfPasswordResetRequired(in: app, loaded: loaded)
+        XCTAssertTrue(loaded, "Nach der Anmeldung sind keine Kataloge erschienen.")
         sleep(5)
         browse(in: app)
 
@@ -205,7 +270,307 @@ final class FramesUITests: XCTestCase {
         #endif
     }
 
+    // MARK: X-Ray
+
+    /// Das Testvideo tritt als Folge einer bekannten Serie auf. Pausieren zeigt die Gesichter,
+    /// die X-Ray-Taste öffnet Besetzung und Musik.
+    func testXRay() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-frames-gast", "-frames-xray"]
+        app.launchEnvironment = ["FRAMES_TEST_VIDEO": sampleMP4]
+        app.launch()
+
+        let status = app.descendants(matching: .any)["player-status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 30), "Der Player ist nicht erschienen.")
+        var hasPicture = false
+        for _ in 0..<60 where !hasPicture {
+            hasPicture = status.label.contains("bild=true")
+            if !hasPicture { sleep(1) }
+        }
+        sleep(4)
+
+        // Pause: über der Zeitleiste erscheinen die ersten Gesichter.
+        #if os(tvOS)
+        XCUIRemote.shared.press(.select)
+        #else
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap()
+        sleep(1)
+        let pause = app.buttons["PAUSE"]
+        if pause.exists { pause.tap() }
+        #endif
+        let teaser = app.descendants(matching: .any)["xray-teaser"]
+        print("FRAMES-UI X-Ray-Vorschau beim Pausieren: \(teaser.waitForExistence(timeout: 20))")
+        sleep(3)
+        snap("30-XRay-Pause")
+
+        let button = app.buttons["xray-button"]
+        XCTAssertTrue(button.waitForExistence(timeout: 20), "Die X-Ray-Taste fehlt.")
+        #if os(tvOS)
+        XCUIRemote.shared.press(.down)
+        sleep(2)
+        // Bei Serien steht der Fokus zuerst auf FOLGEN, X-RAY liegt rechts daneben.
+        for _ in 0..<4 where !button.hasFocus {
+            XCUIRemote.shared.press(.right)
+            sleep(1)
+        }
+        print("FRAMES-UI Fokus vor X-Ray: \(focusedLabel(in: app))")
+        XCUIRemote.shared.press(.select)
+        #else
+        if !button.isHittable {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap()
+            sleep(1)
+        }
+        button.tap()
+        #endif
+        let cranston = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Bryan Cranston'")).firstMatch
+        let hasCast = cranston.waitForExistence(timeout: 20)
+        sleep(2)
+        print("FRAMES-UI X-Ray Besetzung gefunden=\(hasCast)")
+        XCTAssertTrue(hasCast, "Im X-Ray fehlt die Besetzung.")
+        snap("31-XRay-Besetzung")
+
+        #if os(tvOS)
+        for _ in 0..<5 {
+            XCUIRemote.shared.press(.down)
+            sleep(1)
+        }
+        snap("32-XRay-Besetzung-weiter")
+        for _ in 0..<8 {
+            XCUIRemote.shared.press(.up)
+        }
+        sleep(1)
+        XCUIRemote.shared.press(.right)
+        sleep(1)
+        XCUIRemote.shared.press(.select)
+        #else
+        app.swipeUp()
+        sleep(2)
+        snap("32-XRay-Besetzung-weiter")
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'MUSIK'")).firstMatch.tap()
+        #endif
+        let music = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Music From the Original Series'")).firstMatch
+        let hasMusic = music.waitForExistence(timeout: 30)
+        print("FRAMES-UI X-Ray Musik gefunden=\(hasMusic)")
+        XCTAssertTrue(hasMusic, "Im X-Ray fehlt der Soundtrack.")
+        sleep(3)
+        snap("33-XRay-Musik")
+
+        #if os(tvOS)
+        // Ein Song zeigt auf dem Fernseher den QR-Code für Spotify.
+        for _ in 0..<2 {
+            XCUIRemote.shared.press(.down)
+            sleep(1)
+        }
+        XCUIRemote.shared.press(.select)
+        sleep(3)
+        snap("34-XRay-QR")
+        XCUIRemote.shared.press(.menu)
+        sleep(2)
+        #endif
+    }
+
+    // MARK: Start-Animationen und App-Symbol
+
+    /// Startet die App einmal je Start-Animation und hält sie mit Bildschirmfotos fest. Die CI nimmt dazu ein Video auf.
+    func testStartanimationen() {
+        let styles = ["stapel", "filmstreifen", "auffaechern", "zeichnen", "blitz", "abtaster", "countdown", "huepfer"]
+        for style in styles {
+            let app = XCUIApplication()
+            app.launchArguments = ["-frames-gast", "-frames-start", style]
+            app.launch()
+            usleep(900_000)
+            snap("20-Start-\(style)-1")
+            usleep(900_000)
+            snap("20-Start-\(style)-2")
+            sleep(2)
+            print("FRAMES-UI Start-Animation \(style) gelaufen")
+            app.terminate()
+        }
+    }
+
+    /// Zeigt unter Einstellungen den Bereich „Start“ mit der Wahl der Animation und der App-Symbole.
+    func testStartEinstellungen() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-frames-gast"]
+        app.launch()
+        XCTAssertTrue(waitForContent(in: app, seconds: 60), "Home ist nicht erschienen.")
+        guard openSection("Einstellungen", in: app) else {
+            XCTFail("Einstellungen nicht erreicht")
+            return
+        }
+        sleep(2)
+        #if os(tvOS)
+        let remote = XCUIRemote.shared
+        for _ in 0..<9 {
+            remote.press(.down)
+            usleep(300_000)
+        }
+        #else
+        app.swipeUp()
+        app.swipeUp()
+        #endif
+        sleep(2)
+        snap("30-Einstellungen-Start-1")
+        let chip = app.buttons["BLITZ"].firstMatch
+        if chip.waitForExistence(timeout: 5) {
+            #if os(tvOS)
+            for _ in 0..<4 where !chip.hasFocus {
+                XCUIRemote.shared.press(.right)
+                usleep(300_000)
+            }
+            XCUIRemote.shared.press(.select)
+            #else
+            chip.tap()
+            #endif
+            sleep(2)
+            snap("31-Einstellungen-Start-Vorschau")
+            sleep(2)
+            snap("32-Einstellungen-Start-Vorschau")
+        } else {
+            note("Start-Einstellungen", texts(in: app))
+        }
+        #if !os(tvOS)
+        app.swipeUp()
+        sleep(1)
+        snap("33-Einstellungen-Symbole")
+        #endif
+    }
+
+    // MARK: Folgen
+
+    /// Der Testfilm als erste Folge von Breaking Bad mit festen Marken: Rückblick und Intro überspringen,
+    /// im Abspann der Countdown, danach startet die zweite Folge im selben Player, dann die Folgenliste.
+    func testFolgen() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-frames-gast", "-frames-folgen"]
+        app.launchEnvironment = ["FRAMES_TEST_VIDEO": sampleMP4]
+        app.launch()
+
+        let status = app.descendants(matching: .any)["player-status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 30), "Der Player ist nicht erschienen.")
+        _ = wait(for: "bild=true", in: status, seconds: 60)
+        print("FRAMES-UI Folgen Start: \(status.label)")
+
+        // Rückblick, dann Intro: jeweils die Taste unten rechts.
+        for kind in ["recap", "intro"] {
+            guard wait(for: "taste=\(kind)", in: status, seconds: 25) else {
+                print("FRAMES-UI Folgen: keine Taste für \(kind): \(status.label)")
+                continue
+            }
+            sleep(1)
+            snap("30-Folgen-Taste-\(kind)")
+            pressSkip(in: app)
+            sleep(2)
+            print("FRAMES-UI Folgen nach Überspringen \(kind): \(status.label)")
+        }
+
+        // Abspann: die Karte mit dem Countdown.
+        let counting = wait(for: "karte=counting", in: status, seconds: 50)
+        print("FRAMES-UI Folgen Abspann: \(status.label)")
+        XCTAssertTrue(counting, "Im Abspann erscheint keine Karte zur nächsten Folge.")
+        sleep(2)
+        snap("31-Folgen-Countdown")
+        sleep(4)
+        snap("32-Folgen-Countdown-später")
+
+        let switched = wait(for: "folge=tt0903747:1:2", in: status, seconds: 30)
+        print("FRAMES-UI Folgen danach: \(status.label)")
+        XCTAssertTrue(switched, "Die nächste Folge startet nicht.")
+        _ = wait(for: "bild=true", in: status, seconds: 30)
+        sleep(3)
+        snap("33-Folgen-nächste-Folge")
+
+        // Die Folgenliste.
+        #if os(tvOS)
+        XCUIRemote.shared.press(.down)
+        for _ in 0..<10 where focusedLabel(in: app) != "FOLGEN" {
+            usleep(300_000)
+        }
+        print("FRAMES-UI Folgen Fokus: \(focusedLabel(in: app))")
+        XCUIRemote.shared.press(.select)
+        #else
+        app.tap()
+        let button = app.buttons["episodes-button"]
+        if button.waitForExistence(timeout: 5) { button.tap() }
+        #endif
+        sleep(3)
+        snap("34-Folgen-Liste")
+        print("FRAMES-UI Folgen Liste offen: \(app.staticTexts["S01 E02"].exists)")
+        sleep(3)
+    }
+
+    /// Einstellung „Auto“: die Taste füllt sich fünf Sekunden lang, dann springt der Player von selbst,
+    /// ohne dass etwas gedrückt wird.
+    func testFolgenAutomatisch() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-frames-gast", "-frames-folgen", "-frames-auto-skip"]
+        app.launchEnvironment = ["FRAMES_TEST_VIDEO": sampleMP4]
+        app.launch()
+
+        let status = app.descendants(matching: .any)["player-status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 30), "Der Player ist nicht erschienen.")
+        _ = wait(for: "bild=true", in: status, seconds: 60)
+
+        // Rückblick 1–10 s, Intro 14–24 s. Ohne Sprung bräuchte die Wiedergabe jeweils rund 10 Sekunden
+        // vom Erscheinen der Taste bis zum Ende, mit dem Countdown von 5 Sekunden sind es etwa 5.
+        for (kind, end) in [("recap", 10), ("intro", 24)] {
+            XCTAssertTrue(wait(for: "taste=\(kind)", in: status, seconds: 25), "Keine Taste für \(kind): \(status.label)")
+            XCTAssertFalse(status.label.contains("zaehler=-"), "Kein Countdown auf der Taste: \(status.label)")
+            let shownAt = time(in: status.label)
+            let started = Date()
+            print("FRAMES-UI Auto \(kind) Countdown: \(status.label)")
+            sleep(2)
+            snap("36-Auto-Countdown-\(kind)")
+            var jumped = false
+            for _ in 0..<20 where !jumped {
+                jumped = time(in: status.label) >= end
+                if !jumped { usleep(500_000) }
+            }
+            print("FRAMES-UI Auto nach \(kind): \(status.label)")
+            XCTAssertTrue(jumped, "\(kind) wurde nicht von selbst übersprungen: \(status.label)")
+            let waited = Date().timeIntervalSince(started)
+            XCTAssertLessThan(waited, Double(end - shownAt) - 2, "\(kind) lief einfach durch statt zu springen.")
+        }
+    }
+
+    private func wait(for text: String, in status: XCUIElement, seconds: Int) -> Bool {
+        for _ in 0..<(seconds * 2) {
+            if status.label.contains(text) { return true }
+            usleep(500_000)
+        }
+        return false
+    }
+
+    private func pressSkip(in app: XCUIApplication) {
+        #if os(tvOS)
+        // Der Fokus springt von selbst auf die Taste.
+        for _ in 0..<10 where !focusedLabel(in: app).contains("ÜBERSPRINGEN") {
+            usleep(300_000)
+        }
+        let focused = focusedLabel(in: app)
+        print("FRAMES-UI Folgen Fokus: \(focused)")
+        if focused.contains("ÜBERSPRINGEN") {
+            XCUIRemote.shared.press(.select)
+        } else {
+            print("FRAMES-UI Folgen: Taste ohne Fokus, nichts gedrückt")
+        }
+        #else
+        let button = app.buttons["segment-skip"]
+        if button.waitForExistence(timeout: 3) { button.tap() }
+        #endif
+    }
+
     // MARK: Hilfen
+
+    /// Sperrt Stremio das Test-Konto bis zu einem neuen Passwort, ist das kein Fehler der App.
+    private func skipIfPasswordResetRequired(in app: XCUIApplication, loaded: Bool) throws {
+        guard !loaded else { return }
+        let notice = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] 'neues Passwort'")).firstMatch
+        if notice.exists {
+            print("FRAMES-UI Konto: Stremio verlangt ein neues Passwort, Test übersprungen.")
+            throw XCTSkip("Stremio verlangt für das Test-Konto ein neues Passwort. Danach FRAMES_PASSWORD aktualisieren.")
+        }
+    }
 
     private func time(in label: String) -> Int {
         guard let part = label.split(separator: " ").first(where: { $0.hasPrefix("zeit=") }) else { return -1 }
@@ -270,6 +635,45 @@ final class FramesUITests: XCTestCase {
         sleep(2)
     }
 
+    private func openFilters(_ toggle: XCUIElement, in app: XCUIApplication) {
+        let remote = XCUIRemote.shared
+        for _ in 0..<4 where !toggle.hasFocus {
+            remote.press(.up)
+            sleep(1)
+        }
+        remote.press(.select)
+    }
+
+    /// Geht nach unten bis in die Zeile mit diesen Tasten und dann seitwärts genau bis zur gesuchten.
+    private func choose(_ label: String, among row: [String], in app: XCUIApplication) -> Bool {
+        let remote = XCUIRemote.shared
+        for _ in 0..<8 where !row.contains(focusedLabel(in: app)) {
+            remote.press(.down)
+            sleep(1)
+        }
+        guard let target = row.firstIndex(of: label) else { return false }
+        for _ in 0..<row.count {
+            guard let current = row.firstIndex(of: focusedLabel(in: app)) else { return false }
+            if current == target {
+                remote.press(.select)
+                return true
+            }
+            remote.press(current < target ? .right : .left)
+            sleep(1)
+        }
+        return false
+    }
+
+    private func openRow(_ row: XCUIElement, in app: XCUIApplication) {
+        let remote = XCUIRemote.shared
+        for _ in 0..<12 where !focusedLabel(in: app).hasPrefix("Webtor.io") {
+            remote.press(.down)
+            sleep(1)
+        }
+        print("FRAMES-UI Fokus vor dem Start: \(focusedLabel(in: app))")
+        remote.press(.select)
+    }
+
     private func select(_ element: XCUIElement, in app: XCUIApplication) {
         XCUIRemote.shared.press(.select)
     }
@@ -320,6 +724,24 @@ final class FramesUITests: XCTestCase {
     private func activate(_ element: XCUIElement, in app: XCUIApplication) {
         if !element.isHittable { app.swipeUp() }
         element.tap()
+    }
+
+    private func openFilters(_ toggle: XCUIElement, in app: XCUIApplication) {
+        toggle.tap()
+    }
+
+    private func choose(_ label: String, among row: [String], in app: XCUIApplication) -> Bool {
+        let chip = app.buttons[label].firstMatch
+        guard chip.waitForExistence(timeout: 5) else { return false }
+        if !chip.isHittable { app.swipeUp() }
+        guard chip.isHittable else { return false }
+        chip.tap()
+        return true
+    }
+
+    private func openRow(_ row: XCUIElement, in app: XCUIApplication) {
+        for _ in 0..<4 where !row.isHittable { app.swipeUp() }
+        row.tap()
     }
 
     private func select(_ element: XCUIElement, in app: XCUIApplication) {

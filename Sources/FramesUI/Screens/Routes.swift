@@ -36,6 +36,11 @@ struct PlaybackItem: Hashable {
     var videoId: String
     /// Zweite Zeile, etwa „S03 E01 · Titel der Folge“ oder das Jahr.
     var subtitle: String?
+    /// Laufzeit in Minuten, wenn das Addon sie nennt. Daraus schätzt die Quellenliste die Bitrate.
+    var runtimeMinutes: Int? = nil
+    /// Erscheinungsjahr und Besetzung laut Addon. Damit findet das X-Ray im Player Soundtrack und Fotos.
+    var year: Int? = nil
+    var cast: [String] = []
 }
 
 struct StreamsRoute: Hashable {
@@ -46,6 +51,8 @@ struct PlayerRoute: Hashable {
     var url: URL
     var headers: [String: String]
     var item: PlaybackItem
+    /// Addon, Gruppe und Auflösung der gewählten Quelle. Daran sucht der Player die Quelle der nächsten Folge aus.
+    var origin: StreamOrigin? = nil
 }
 
 extension View {
